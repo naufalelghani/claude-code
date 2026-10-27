@@ -100,6 +100,7 @@ const skillSearchFeatureCheck = feature('EXPERIMENTAL_SKILL_SEARCH')
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { OutputStyleConfig } from './outputStyles.js'
 import { CYBER_RISK_INSTRUCTION } from './cyberRiskInstruction.js'
+import { getCodexRuntimeIdentitySection } from './codexRuntimeIdentity.js'
 
 export const CLAUDE_CODE_DOCS_MAP_URL =
   'https://code.claude.com/docs/en/claude_code_docs_map.md'
@@ -451,15 +452,19 @@ export async function getSystemPrompt(
   additionalWorkingDirectories?: string[],
   mcpClients?: MCPServerConnection[],
 ): Promise<string[]> {
+  const codexIdentitySection = getCodexRuntimeIdentitySection(model)
+
   if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
     return [
-      `You are Claude Code, Anthropic's official CLI for Claude.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
+      codexIdentitySection
+        ? `${codexIdentitySection}\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`
+        : `You are Claude Code, Anthropic's official CLI for Claude.\n\nCWD: ${getCwd()}\nDate: ${getSessionStartDate()}`,
     ]
   }
 
   const customPrompt = getCustomSystemPrompt(model)
   if (customPrompt !== null) {
-    return [customPrompt]
+    return codexIdentitySection ? [customPrompt, codexIdentitySection] : [customPrompt]
   }
 
   const cwd = getCwd()
@@ -481,6 +486,7 @@ export async function getSystemPrompt(
       `\nYou are an autonomous agent. Use the available tools to do useful work.
 
 ${CYBER_RISK_INSTRUCTION}`,
+      codexIdentitySection,
       getSystemRemindersSection(),
       await loadMemoryPrompt(),
       envInfo,
@@ -570,6 +576,7 @@ ${CYBER_RISK_INSTRUCTION}`,
     ...(customPrompt !== null ? [customPrompt] : []),
     // --- Static content (cacheable) ---
     getSimpleIntroSection(outputStyleConfig),
+    codexIdentitySection,
     getSimpleSystemSection(),
     outputStyleConfig === null ||
     outputStyleConfig.keepCodingInstructions === true
