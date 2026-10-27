@@ -361,7 +361,7 @@ export function ConsoleOAuthFlow({
       });
       setOAuthStatus({ state: 'error', message: msg, toRetry: { state: 'idle' } });
     }
-  }, [setShowPastePrompt]);
+  }, [setShowPastePrompt, terminal, onDone]);
 
   // Handler for GitHub login selection from the login method dropdown
   const handleGitHubLogin = useCallback(() => {
