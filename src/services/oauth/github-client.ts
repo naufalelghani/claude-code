@@ -97,8 +97,10 @@ export async function exchangeGitHubCodeForToken(
       accessToken: response.data.access_token,
     }
   } catch (error) {
-    logError(error as Error, 'GitHub OAuth token exchange failed')
-    return null
+    logError(error as Error, 'GitHub App token exchange failed')
+    throw new Error(
+      'GitHub authorization code exchange failed. Check the GitHub App Client ID, Client Secret, and registered callback URL, then restart login.',
+    )
   }
 }
 
@@ -178,7 +180,16 @@ export async function verifyGitHubAppInstallation(
     return false
   } catch (error) {
     logError(error as Error, 'GitHub App installation verification failed')
-    return false
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      if (status === 401) {
+        throw new Error('GitHub authorization expired or was rejected. Restart GitHub Organization login.')
+      }
+      if (status === 403) {
+        throw new Error('GitHub denied access to the App installation list. Check the GitHub App configuration and the account permissions, then try again.')
+      }
+    }
+    throw new Error('Could not verify the GitHub App installation with GitHub. Check the network connection and try again.')
   }
 }
 
@@ -214,7 +225,19 @@ export async function verifyGitHubOrgMembership(
     return false
   } catch (error) {
     logError(error as Error, 'GitHub org membership verification failed')
-    return false
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      if (status === 401) {
+        throw new Error('GitHub authorization expired or was rejected. Restart GitHub Organization login.')
+      }
+      if (status === 403) {
+        throw new Error('GitHub denied the organization membership check. Ensure the GitHub App has organization Members read-only permission, then retry.')
+      }
+      if (status === 404) {
+        return false
+      }
+    }
+    throw new Error('Could not verify GitHub organization membership with GitHub. Check the network connection and try again.')
   }
 }
 
