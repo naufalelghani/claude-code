@@ -18,13 +18,15 @@ Configure the GitHub App before enabling this login method:
 
 ## Runtime configuration
 
-Provide these environment variables to the runtime that starts the CLI:
+The source includes defaults for the public App identifiers: the slug `byv-dev-unorganization` and Client ID. These can still be overridden with environment variables:
 
 - `GITHUB_APP_SLUG` (or `CLAUDE_CODE_GITHUB_APP_SLUG`): the GitHub App slug used in the installation URL.
 - `GITHUB_OAUTH_CLIENT_ID` (or `CLAUDE_CODE_GITHUB_CLIENT_ID`): the Client ID from that GitHub App.
 - `GITHUB_OAUTH_CLIENT_SECRET` (or `CLAUDE_CODE_GITHUB_CLIENT_SECRET`): the Client Secret from that GitHub App.
 
-Do not commit real credentials. A shared Client Secret cannot be kept secret in a CLI distributed to untrusted users; deployments that distribute the CLI publicly should perform the code exchange in a trusted backend rather than shipping a shared secret to each client.
+The public source deliberately leaves `X9CDJSA` empty. For a one-machine local build without environment variables, place a newly generated Client Secret in `X9CDJSA` in your local working copy only; do not commit or push that change. The confusing variable name is not encryption or protection.
+
+A CLI is a public client: its embedded Client Secret can be extracted. PKCE helps protect the authorization flow, but the secret must not be treated as the security boundary for internal access. The server issuing the internal token must independently validate the GitHub identity, App installation, and active organization membership.
 
 ## User flow
 
