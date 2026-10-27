@@ -1,12 +1,30 @@
 // GitHub OAuth flow for ConsoleOAuthFlow integration
 // This module provides GitHub Organization login support for Internal team members
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js'
-import { installOAuthTokens } from '../../cli/handlers/auth.js'
 import { type OAuthStatus } from '../../components/ConsoleOAuthFlow.js'
+import { saveGlobalConfig } from '../../utils/config.js'
 import { githubOAuthExchangeCode, githubOAuthFlowWithAccessToken, pollGitHubDeviceCode, requestGitHubDeviceCode } from './github-client.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
+
+function saveGitHubLoginSession(
+  accessToken: string,
+  user: { login: string; name: string; email: string; avatarUrl: string },
+): void {
+  saveGlobalConfig(current => ({
+    ...current,
+    hasCompletedOnboarding: true,
+    githubOAuth: {
+      accessToken,
+      login: user.login,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+    },
+  }))
+}
 
 /**
  * Start GitHub Device Flow for CLI login. Device Flow does not require a
@@ -45,23 +63,10 @@ export async function startGitHubOAuthFlow(
     const result = await githubOAuthFlowWithAccessToken(githubAccessToken)
     if (!result) throw new Error('Failed to exchange GitHub device authorization for an internal token')
 
-    await installOAuthTokens({
-      accessToken: result.accessToken,
-      refreshToken: '',
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
-      scopes: ['user:inference', 'user:profile', 'user:sessions:claude_code', 'user:mcp_servers', 'user:file_upload'],
-      subscriptionType: 'internal',
-      rateLimitTier: null,
-      profile: undefined,
-      tokenAccount: result.user ? {
-        uuid: '',
-        emailAddress: result.user.email,
-        organizationUuid: '',
-      } : undefined,
-    })
+    saveGitHubLoginSession(githubAccessToken, result.user)
 
     logEvent('tengu_oauth_github_success', { loginMethod: 'github' })
-    onStatusUpdate({ state: 'success', token: result.accessToken })
+    onStatusUpdate({ state: 'success' })
     onLoginSuccess()
   } catch (error) {
     logError(error as Error, 'GitHub Device Flow failed')
@@ -98,30 +103,16 @@ export async function handleGitHubManualCode(
       throw new Error('Failed to exchange GitHub code for Anthropic token')
     }
 
-    // Install the OAuth tokens
-    await installOAuthTokens({
-      accessToken: result.accessToken,
-      refreshToken: '', // GitHub OAuth doesn't provide refresh token for internal flows
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
-      scopes: ['user:inference', 'user:profile', 'user:sessions:claude_code', 'user:mcp_servers', 'user:file_upload'],
-      subscriptionType: 'internal',
-      rateLimitTier: null, // Internal users have unlimited access
-      profile: undefined,
-      tokenAccount: result.user ? {
-        uuid: '',
-        emailAddress: result.user.email,
-        organizationUuid: '',
-      } : undefined,
-    })
+    if (!result.user) {
+      throw new Error('GitHub login did not return a user profile.')
+    }
+    saveGitHubLoginSession(result.accessToken, result.user)
 
     logEvent('tengu_oauth_github_success', {
       loginMethod: 'github'
     })
 
-    onStatusUpdate({
-      state: 'success',
-      token: result.accessToken
-    })
+    onStatusUpdate({ state: 'success' })
 
     onLoginSuccess()
   } catch (error) {
