@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { MODEL_ALIASES } from './aliases.js'
+import { MODEL_ALIASES, MODEL_FAMILY_ALIASES } from './aliases.js'
 import {
   CURRENT_CLAUDE_MODELS,
   normalizeClaudeModelFamily,
@@ -14,6 +14,7 @@ describe('current Claude model catalog', () => {
       'haiku',
     ])
     expect(MODEL_ALIASES).toEqual(CURRENT_CLAUDE_MODELS.map(model => model.alias))
+    expect(MODEL_FAMILY_ALIASES).toEqual(CURRENT_CLAUDE_MODELS.map(model => model.alias))
   })
 
   test('uses the requested current display names and model IDs', () => {
@@ -51,6 +52,10 @@ describe('normalizeClaudeModelFamily', () => {
     ['haiku45', 'haiku'],
     ['claude-haiku-5-5', 'haiku'],
     ['claude-3-5-haiku-20241022', 'haiku'],
+    ['fable[1m]', 'fable'],
+    ['opus[1m]', 'opus'],
+    ['sonnet[1m]', 'sonnet'],
+    ['haiku[1m]', 'haiku'],
     ['claude-opus-5-5[1m]', 'opus'],
   ]
 
