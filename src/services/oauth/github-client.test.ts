@@ -70,6 +70,19 @@ describe('GitHub App organization login configuration', () => {
     )
   })
 
+  test('uses built-in public App identifiers when the environment does not override them', () => {
+    delete process.env.GITHUB_APP_SLUG
+    delete process.env.CLAUDE_CODE_GITHUB_APP_SLUG
+    delete process.env.GITHUB_OAUTH_CLIENT_ID
+    delete process.env.CLAUDE_CODE_GITHUB_CLIENT_ID
+    process.env.GITHUB_OAUTH_CLIENT_SECRET = 'test-client-secret'
+
+    const config = getGitHubOAuthConfig()
+
+    expect(config?.clientId).toBe('Iv23liLvuX9wFypmgl68')
+    expect(config?.appSlug).toBe('byv-dev-unorganization')
+  })
+
   test('requires an installation for the exact App on the target organization', () => {
     const targetInstallation = {
       app_slug: 'byv-code',
@@ -122,7 +135,7 @@ describe('GitHub App organization login configuration', () => {
     delete process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
 
     expect(() => buildGitHubAuthUrl('challenge', 'state')).toThrow(
-      'Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
+      'Client Secret is missing',
     )
   })
 })
