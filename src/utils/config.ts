@@ -14,6 +14,7 @@ import type {
 } from '../services/oauth/types.js'
 import { getCwd } from '../utils/cwd.js'
 import { registerCleanup } from './cleanupRegistry.js'
+import { setCodexProviderActive } from './model/providers.js'
 import { logForDebugging } from './debug.js'
 import { logForDiagnosticsNoPII } from './diagLogs.js'
 import { getGlobalClaudeFile } from './env.js'
@@ -1370,6 +1371,14 @@ export function enableConfigs(): void {
     getGlobalClaudeFile(),
     createDefaultGlobalConfig,
     true /* throw on invalid */,
+  )
+
+  // Restore the persisted Codex selection only after config access is allowed.
+  // Older configs may have tokens but not the active flag, so retain backwards
+  // compatibility by treating an existing Codex token as selected.
+  const codexOAuth = getGlobalConfig().codexOAuth
+  setCodexProviderActive(
+    codexOAuth?.active ?? Boolean(codexOAuth?.accessToken),
   )
 
   logForDiagnosticsNoPII('info', 'enable_configs_completed', {
