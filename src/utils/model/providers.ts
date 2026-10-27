@@ -1,18 +1,37 @@
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '../../services/analytics/index.js'
+import { getGlobalConfig } from '../config.js'
 import { isEnvTruthy } from '../envUtils.js'
 
 export type APIProvider = 'firstParty' | 'bedrock' | 'vertex' | 'foundry' | 'openai'
 
+type ProviderEnvironment = {
+  CLAUDE_CODE_USE_BEDROCK?: string
+  CLAUDE_CODE_USE_VERTEX?: string
+  CLAUDE_CODE_USE_FOUNDRY?: string
+  CLAUDE_CODE_USE_OPENAI?: string
+}
+
+/** Pure provider resolution, exported so precedence is covered by unit tests. */
+export function resolveAPIProvider(
+  env: ProviderEnvironment,
+  codexOAuthActive: boolean,
+): APIProvider {
+  if (isEnvTruthy(env.CLAUDE_CODE_USE_BEDROCK)) return 'bedrock'
+  if (isEnvTruthy(env.CLAUDE_CODE_USE_VERTEX)) return 'vertex'
+  if (isEnvTruthy(env.CLAUDE_CODE_USE_FOUNDRY)) return 'foundry'
+  if (env.CLAUDE_CODE_USE_OPENAI !== undefined) {
+    return isEnvTruthy(env.CLAUDE_CODE_USE_OPENAI) ? 'openai' : 'firstParty'
+  }
+  return codexOAuthActive ? 'openai' : 'firstParty'
+}
+
 export function getAPIProvider(): APIProvider {
-  return isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
-    ? 'bedrock'
-    : isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
-      ? 'vertex'
-      : isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
-        ? 'foundry'
-        : isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI)
-          ? 'openai'
-          : 'firstParty'
+  const codexOAuth = getGlobalConfig().codexOAuth
+  // Existing Codex tokens predate the active preference. Treat those as the
+  // selected provider until the user logs into another provider explicitly.
+  const codexOAuthActive =
+    codexOAuth?.active ?? Boolean(codexOAuth?.accessToken)
+  return resolveAPIProvider(process.env, codexOAuthActive)
 }
 
 export function getAPIProviderForStatsig(): AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
