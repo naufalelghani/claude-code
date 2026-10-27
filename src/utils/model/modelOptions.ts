@@ -1,5 +1,4 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
-import { getInitialMainLoopModel } from '../../bootstrap/state.js'
 import {
   isCodexSubscriber,
   isInternalSubscriber,
@@ -24,7 +23,6 @@ import {
 } from '../modelCost.js'
 import type { ModelKey } from './configs.js'
 import { getSettings_DEPRECATED } from '../settings/settings.js'
-import { checkOpus1mAccess, checkSonnet1mAccess } from './check1mAccess.js'
 import { getAPIProvider } from './providers.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import {
@@ -45,7 +43,6 @@ import {
 } from './model.js'
 import { has1mContext } from '../context.js'
 import { getGlobalConfig } from '../config.js'
-import { getAntModels } from './antModels.js'
 
 // @[MODEL LAUNCH]: Update all the available and default model option strings below.
 
