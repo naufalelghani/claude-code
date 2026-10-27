@@ -242,6 +242,7 @@ npm test
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Custom Sonnet model ID |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Custom Haiku model ID |
 | `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token via env |
+| `CLAUDE_CODE_USE_OPENAI` | Force the OpenAI Codex provider |
 | `CLAUDE_CODE_API_KEY_HELPER_TTL_MS` | API key helper cache TTL |
 
 ---
