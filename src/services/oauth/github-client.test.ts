@@ -121,7 +121,7 @@ describe('GitHub App organization login configuration', () => {
     delete process.env.GITHUB_OAUTH_CLIENT_SECRET
     delete process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
 
-    expect(() => buildGitHubInstallUrl('state')).toThrow(
+    expect(() => buildGitHubAuthUrl('challenge', 'state')).toThrow(
       'Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
     )
   })
