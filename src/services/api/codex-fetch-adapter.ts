@@ -203,6 +203,9 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     | undefined
   const claudeModel = anthropicBody.model as string
   const anthropicTools = (anthropicBody.tools || []) as AnthropicTool[]
+  const outputConfig = anthropicBody.output_config as
+    | { effort?: unknown }
+    | undefined
 
   const codexModel = mapClaudeModelToCodex(claudeModel)
 
@@ -231,6 +234,16 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     input,
     tool_choice: 'auto',
     parallel_tool_calls: true,
+  }
+
+  // Forward supported reasoning effort from the Anthropic-shaped request to
+  // the Codex Responses API. Otherwise Codex would ignore the user's effort setting.
+  const effort = outputConfig?.effort
+  if (
+    typeof effort === 'string' &&
+    ['none', 'low', 'medium', 'high', 'xhigh', 'max'].includes(effort)
+  ) {
+    codexBody.reasoning = { effort }
   }
 
   // Add tools if present
