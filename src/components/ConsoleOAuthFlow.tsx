@@ -94,7 +94,7 @@ export function ConsoleOAuthFlow({
   const [showPastePrompt, setShowPastePrompt] = useState(false);
   // Keep the one-time GitHub callback state for this login attempt so a
   // pasted callback cannot be reused across sessions.
-  const githubOAuthSessionRef = useRef<{ state: string } | null>(null);
+  const githubOAuthSessionRef = useRef<{ state: string; codeVerifier: string } | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
   const textInputColumns = useTerminalSize().columns - PASTE_HERE_MSG.length - 1;
 
@@ -189,6 +189,7 @@ export function ConsoleOAuthFlow({
 
         await handleGitHubManualCode(
           authorizationCode,
+          githubSession.codeVerifier,
           setOAuthStatus,
           () => {
             githubOAuthSessionRef.current = null;
@@ -327,13 +328,16 @@ export function ConsoleOAuthFlow({
   const startGitHubOAuth = useCallback(async () => {
     try {
       logEvent('tengu_oauth_github_flow_start', {});
-      // Save the one-time state for the callback submitted below.
+      // Generate a one-time state and a PKCE verifier/challenge for this user.
+      const codeVerifier = crypto.randomBytes(32).toString('base64url');
+      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
       const state = crypto.randomBytes(16).toString('base64url');
-      githubOAuthSessionRef.current = { state };
+      githubOAuthSessionRef.current = { state, codeVerifier };
       setShowPastePrompt(false);
 
-      // Start the GitHub App installation flow. Show the URL after a short
-      // delay even when the CLI is remote/headless and cannot open a browser.
+      // Authenticate the current GitHub user. If the organization App is not
+      // installed yet, the error response includes the install/request link.
+      // Show the authorization URL in remote/headless terminals as well.
       await startGitHubOAuthFlow(
         (status) => {
           setOAuthStatus(status);
@@ -342,6 +346,7 @@ export function ConsoleOAuthFlow({
           }
         },
         state,
+        codeChallenge,
       );
     } catch (err) {
       const msg = (err as Error).message;
