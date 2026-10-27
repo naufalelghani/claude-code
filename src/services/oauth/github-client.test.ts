@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { buildGitHubInstallUrl, getGitHubOAuthConfig } from './github-client.js'
+import {
+  buildGitHubInstallUrl,
+  getGitHubOAuthConfig,
+  hasRequiredGitHubAppInstallation,
+  isActiveGitHubOrgMembershipState,
+} from './github-client.js'
 
 const ENV_NAMES = [
   'GITHUB_APP_SLUG',
@@ -47,6 +52,49 @@ describe('GitHub App organization login configuration', () => {
     expect(new URL(buildGitHubInstallUrl('state')).pathname).toBe(
       '/apps/byv-code/installations/new',
     )
+  })
+
+  test('requires an installation for the exact App on the target organization', () => {
+    const targetInstallation = {
+      app_slug: 'byv-code',
+      target_type: 'Organization',
+      account: { login: 'BYV-Dev-Unorganization' },
+    }
+
+    expect(
+      hasRequiredGitHubAppInstallation(
+        [targetInstallation],
+        'byv-code',
+        'BYV-Dev-Unorganization',
+      ),
+    ).toBe(true)
+    expect(
+      hasRequiredGitHubAppInstallation(
+        [targetInstallation],
+        'another-app',
+        'BYV-Dev-Unorganization',
+      ),
+    ).toBe(false)
+    expect(
+      hasRequiredGitHubAppInstallation(
+        [targetInstallation],
+        'byv-code',
+        'some-other-org',
+      ),
+    ).toBe(false)
+    expect(
+      hasRequiredGitHubAppInstallation(
+        [{ ...targetInstallation, target_type: 'User' }],
+        'byv-code',
+        'BYV-Dev-Unorganization',
+      ),
+    ).toBe(false)
+  })
+
+  test('only active organization membership passes', () => {
+    expect(isActiveGitHubOrgMembershipState('active')).toBe(true)
+    expect(isActiveGitHubOrgMembershipState('pending')).toBe(false)
+    expect(isActiveGitHubOrgMembershipState(undefined)).toBe(false)
   })
 
   test('fails with an actionable message when the App is not configured', () => {
