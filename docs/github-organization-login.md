@@ -9,12 +9,11 @@ An App installation alone does not grant CLI access. An active organization memb
 
 ## GitHub App setup
 
-Configure the GitHub App before enabling this login method:
+Configure the GitHub App before using this login method:
 
-1. Set a Callback URL that exactly matches the value returned by `getOauthConfig().MANUAL_REDIRECT_URL` in this CLI build. The URL must match the callback URL used during token exchange.
+1. Enable **Device Flow** in the GitHub App settings. This is required for CLI authentication and avoids embedding a Client Secret.
 2. Grant the App the organization **Members: read-only** permission so the CLI can query the current user's organization membership.
 3. Make the App available to the `BYV-Dev-Unorganization` organization and install it there. If GitHub requires approval, an organization owner must approve it before login can succeed.
-4. Enable **Device Flow** in the GitHub App settings. The CLI then uses GitHub's device authorization grant, which is designed for CLI applications and does not need a Client Secret. Each user authorizes their own GitHub account.
 
 ## Runtime configuration
 
@@ -46,4 +45,4 @@ The checks in this CLI prevent normal users from completing a login when install
 - **GitHub Organization login is not configured**: verify the App slug and Client ID defaults or their environment-variable overrides.
 - **The App must be installed**: use the installation link printed by the CLI and have an organization owner install or approve it on `BYV-Dev-Unorganization`, not on a personal account or another organization. Then restart login.
 - **Must have active membership**: confirm the GitHub account used for authorization is an active member of the organization. Pending invitations do not pass.
-- **Authorization code/state rejected**: restart login to create a fresh state and submit the code and state from that same attempt.
+- **Device Flow is disabled**: enable Device Flow in the GitHub App settings, then restart `/login`.
