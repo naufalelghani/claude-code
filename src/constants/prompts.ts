@@ -486,7 +486,6 @@ export async function getSystemPrompt(
       `\nYou are an autonomous agent. Use the available tools to do useful work.
 
 ${CYBER_RISK_INSTRUCTION}`,
-      codexIdentitySection,
       getSystemRemindersSection(),
       await loadMemoryPrompt(),
       envInfo,
@@ -500,6 +499,7 @@ ${CYBER_RISK_INSTRUCTION}`,
       getFunctionResultClearingSection(model),
       SUMMARIZE_TOOL_RESULTS_SECTION,
       getProactiveSection(),
+      codexIdentitySection,
     ].filter(s => s !== null)
   }
 
@@ -576,7 +576,6 @@ ${CYBER_RISK_INSTRUCTION}`,
     ...(customPrompt !== null ? [customPrompt] : []),
     // --- Static content (cacheable) ---
     getSimpleIntroSection(outputStyleConfig),
-    codexIdentitySection,
     getSimpleSystemSection(),
     outputStyleConfig === null ||
     outputStyleConfig.keepCodingInstructions === true
@@ -590,6 +589,7 @@ ${CYBER_RISK_INSTRUCTION}`,
     ...(shouldUseGlobalCacheScope() ? [SYSTEM_PROMPT_DYNAMIC_BOUNDARY] : []),
     // --- Dynamic content (registry-managed) ---
     ...resolvedDynamicSections,
+    codexIdentitySection,
   ].filter(s => s !== null)
 }
 
