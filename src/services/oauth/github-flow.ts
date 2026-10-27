@@ -37,7 +37,6 @@ function generateState(): string {
  */
 export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
-  onDone: () => void,
   state: string,
 ): Promise<void> {
   try {
