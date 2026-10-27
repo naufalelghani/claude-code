@@ -94,7 +94,7 @@ export function ConsoleOAuthFlow({
   const [showPastePrompt, setShowPastePrompt] = useState(false);
   // Keep the one-time GitHub callback state and PKCE verifier for this login
   // attempt so the pasted callback cannot be reused across sessions.
-  const githubOAuthSessionRef = useRef<{ state: string; codeVerifier: string } | null>(null);
+  const githubOAuthSessionRef = useRef<{ state: string } | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
   const textInputColumns = useTerminalSize().columns - PASTE_HERE_MSG.length - 1;
 
@@ -189,8 +189,6 @@ export function ConsoleOAuthFlow({
 
         await handleGitHubManualCode(
           authorizationCode,
-          state,
-          githubSession.codeVerifier,
           setOAuthStatus,
           () => {
             githubOAuthSessionRef.current = null;
@@ -330,9 +328,8 @@ export function ConsoleOAuthFlow({
     try {
       logEvent('tengu_oauth_github_flow_start', {});
       // Save state and PKCE verifier for the manual callback submitted below.
-      const codeVerifier = crypto.randomBytes(32).toString('base64url');
       const state = crypto.randomBytes(16).toString('base64url');
-      githubOAuthSessionRef.current = { state, codeVerifier };
+      githubOAuthSessionRef.current = { state };
       setShowPastePrompt(false);
 
       // Start the GitHub App installation flow. Show the URL after a short
