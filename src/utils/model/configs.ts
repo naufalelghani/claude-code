@@ -32,7 +32,7 @@ export const CLAUDE_HAIKU_5_5_CONFIG = {
   bedrock: 'anthropic.claude-haiku-5-5',
   vertex: 'claude-haiku-5-5',
   foundry: 'claude-haiku-5-5',
-  openai: 'claude-haiku-5-5-20251101',
+  openai: 'claude-haiku-5-5',
 } as const satisfies ModelConfig
 
 // Claude 5.0 Sonnet
@@ -50,7 +50,7 @@ export const CLAUDE_SONNET_5_5_CONFIG = {
   bedrock: 'anthropic.claude-sonnet-5-5',
   vertex: 'claude-sonnet-5-5',
   foundry: 'claude-sonnet-5-5',
-  openai: 'claude-sonnet-5-5-20251101',
+  openai: 'claude-sonnet-5-5',
 } as const satisfies ModelConfig
 
 // Claude 3 Opus
@@ -95,7 +95,7 @@ export const CLAUDE_OPUS_5_5_CONFIG = {
   bedrock: 'anthropic.claude-opus-5-5',
   vertex: 'claude-opus-5-5',
   foundry: 'claude-opus-5-5',
-  openai: 'claude-opus-5-5-20251101',
+  openai: 'claude-opus-5-5',
 } as const satisfies ModelConfig
 
 // Claude 5.1 Fable
