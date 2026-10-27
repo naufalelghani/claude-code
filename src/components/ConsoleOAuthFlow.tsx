@@ -63,7 +63,7 @@ export function ConsoleOAuthFlow({
   const settings = getSettings_DEPRECATED() || {};
   const forceLoginMethod = forceLoginMethodProp ?? settings.forceLoginMethod;
   const orgUUID = settings.forceLoginOrgUUID;
-  const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : null;
+  const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : forceLoginMethod === 'github' ? 'Login method pre-selected: GitHub Organization' : null;
   const terminal = useTerminalNotification();
   const [oauthStatus, setOAuthStatus] = useState<OAuthStatus>(() => {
     if (mode === 'setup-token') {
@@ -71,7 +71,7 @@ export function ConsoleOAuthFlow({
         state: 'ready_to_start'
       };
     }
-    if (forceLoginMethod === 'claudeai' || forceLoginMethod === 'console') {
+    if (forceLoginMethod === 'claudeai' || forceLoginMethod === 'console' || forceLoginMethod === 'github') {
       return {
         state: 'ready_to_start'
       };
@@ -365,7 +365,12 @@ export function ConsoleOAuthFlow({
   useEffect(() => {
     if (oauthStatus.state === 'ready_to_start' && !pendingOAuthStartRef.current) {
       pendingOAuthStartRef.current = true;
-      if (loginWithCodex) {
+      if (forceLoginMethod === 'github') {
+        process.nextTick((startGitHubOAuth_0: () => Promise<void>, pendingOAuthStartRef_0: React.MutableRefObject<boolean>) => {
+          void startGitHubOAuth_0();
+          pendingOAuthStartRef_0.current = false;
+        }, startGitHubOAuth, pendingOAuthStartRef);
+      } else if (loginWithCodex) {
         process.nextTick((startCodexOAuth_0: () => Promise<void>, pendingOAuthStartRef_0: React.MutableRefObject<boolean>) => {
           void startCodexOAuth_0();
           pendingOAuthStartRef_0.current = false;
@@ -377,7 +382,7 @@ export function ConsoleOAuthFlow({
         }, startOAuth, pendingOAuthStartRef);
       }
     }
-  }, [oauthStatus.state, startOAuth, startCodexOAuth, loginWithCodex]);
+  }, [oauthStatus.state, startOAuth, startCodexOAuth, startGitHubOAuth, loginWithCodex, forceLoginMethod]);
 
   // Auto-exit for setup-token mode
   useEffect(() => {
