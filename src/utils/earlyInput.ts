@@ -12,6 +12,7 @@
  */
 
 import { lastGrapheme } from './intl.js'
+import { createTerminalInputFilter } from './terminalInputFilter.js'
 
 // Buffer for early input characters
 let earlyInputBuffer = ''
@@ -19,6 +20,8 @@ let earlyInputBuffer = ''
 let isCapturing = false
 // Reference to the readable handler so we can remove it later
 let readableHandler: (() => void) | null = null
+// Filters terminal query replies before they can be mistaken for early typing.
+let filterTerminalInput = createTerminalInputFilter()
 
 /**
  * Start capturing stdin data early, before the REPL is initialized.
@@ -41,6 +44,7 @@ export function startCapturingEarlyInput(): void {
 
   isCapturing = true
   earlyInputBuffer = ''
+  filterTerminalInput = createTerminalInputFilter()
 
   // Set stdin to raw mode and use 'readable' event like Ink does
   // This ensures compatibility with how the REPL will handle stdin later
@@ -70,9 +74,12 @@ export function startCapturingEarlyInput(): void {
  * Process a chunk of input data
  */
 function processChunk(str: string): void {
+  // Terminal replies share stdin with keystrokes. Strip complete escape sequences,
+  // including DCS replies such as xterm.js XTVERSION, before buffering typed text.
+  const filtered = filterTerminalInput(str)
   let i = 0
-  while (i < str.length) {
-    const char = str[i]!
+  while (i < filtered.length) {
+    const char = filtered[i]!
     const code = char.charCodeAt(0)
 
     // Ctrl+C (code 3) - stop capturing and exit immediately.
@@ -98,21 +105,6 @@ function processChunk(str: string): void {
         earlyInputBuffer = earlyInputBuffer.slice(0, -(last.length || 1))
       }
       i++
-      continue
-    }
-
-    // Skip escape sequences (arrow keys, function keys, focus events, etc.)
-    // All escape sequences start with ESC (0x1B) and end with a byte in 0x40-0x7E
-    if (code === 27) {
-      i++ // Skip the ESC character
-      // Skip until the terminating byte (@ to ~) or end of string
-      while (
-        i < str.length &&
-        !(str.charCodeAt(i) >= 64 && str.charCodeAt(i) <= 126)
-      ) {
-        i++
-      }
-      if (i < str.length) i++ // Skip the terminating byte
       continue
     }
 
