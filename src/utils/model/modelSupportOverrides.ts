@@ -21,6 +21,10 @@ const TIERS = [
     modelEnvVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
     capabilitiesEnvVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES',
   },
+  {
+    modelEnvVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    capabilitiesEnvVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES',
+  },
 ] as const
 
 /**
