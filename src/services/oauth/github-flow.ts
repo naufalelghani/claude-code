@@ -3,7 +3,7 @@
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js'
 import { installOAuthTokens } from '../../cli/handlers/auth.js'
 import { type OAuthStatus } from '../../components/ConsoleOAuthFlow.js'
-import { buildGitHubInstallUrl, githubOAuthExchangeCode } from './github-client.js'
+import { buildGitHubAuthUrl, githubOAuthExchangeCode } from './github-client.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
@@ -11,25 +11,27 @@ import { openBrowser } from '../../utils/browser.js'
 /**
  * Start the GitHub OAuth flow for internal team members.
  * This function handles:
- * 1. Building the GitHub App installation URL with a one-time state
- * 2. Opening the browser for installation and user authorization
+ * 1. Building a GitHub App user-authorization URL with PKCE and a one-time state
+ * 2. Opening the browser for user authorization
  * 3. Handling the callback (manual code entry)
- * 4. Verifying installation and active organization membership
+ * 4. Verifying App installation and active organization membership
  * 5. Exchanging the GitHub token for an internal OAuth token
  *
  * @param onStatusUpdate Callback to update OAuthStatus during the flow
  * @param state The state parameter for this login attempt (CSRF protection)
+ * @param codeChallenge The SHA-256 PKCE challenge for this login attempt
  */
 export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
   state: string,
+  codeChallenge: string,
 ): Promise<void> {
   try {
     logEvent('tengu_oauth_github_flow_start', {})
 
-    const authUrl = buildGitHubInstallUrl(state)
+    const authUrl = buildGitHubAuthUrl(codeChallenge, state)
 
-    // Auto-open the GitHub App installation page when a local browser is available.
+    // Auto-open the GitHub App authorization page when a local browser is available.
     try {
       await openBrowser(authUrl)
     } catch (e) {
@@ -43,9 +45,8 @@ export async function startGitHubOAuthFlow(
       url: authUrl,
     })
 
-    // The app installation triggers GitHub App user authorization. The CLI
-    // receives the returned code/state through the manual callback input and
-    // validates both before exchanging the code.
+    // The authenticated user may then install or request the App installation
+    // if it is missing. The code/state pair is validated before token exchange.
   } catch (error) {
     logError(error as Error, 'GitHub OAuth flow failed')
     logEvent('tengu_oauth_github_error', {
@@ -65,6 +66,7 @@ export async function startGitHubOAuthFlow(
  */
 export async function handleGitHubManualCode(
   authorizationCode: string,
+  codeVerifier: string,
   onStatusUpdate: (status: OAuthStatus) => void,
   onLoginSuccess: () => void,
 ): Promise<void> {
@@ -74,7 +76,7 @@ export async function handleGitHubManualCode(
     // Exchange GitHub code for Anthropic OAuth token
     onStatusUpdate({ state: 'creating_api_key' })
 
-    const result = await githubOAuthExchangeCode(authorizationCode)
+    const result = await githubOAuthExchangeCode(authorizationCode, codeVerifier)
 
     if (!result) {
       throw new Error('Failed to exchange GitHub code for Anthropic token')
