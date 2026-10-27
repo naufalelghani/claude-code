@@ -29,6 +29,14 @@ export function modelSupportsEffort(model: string): boolean {
   if (supported3P !== undefined) {
     return supported3P
   }
+  // OpenAI documents effort support for the current Codex model catalog.
+  if (
+    m.includes('gpt-6-luna') ||
+    m.includes('gpt-5.6-terra') ||
+    m.includes('gpt-5.6-luna')
+  ) {
+    return true
+  }
   // The four current Claude models support the effort parameter.
   if (
     m.includes('claude-fable-5-1') ||
@@ -63,6 +71,9 @@ export function modelSupportsMaxEffort(model: string): boolean {
   }
   const m = model.toLowerCase()
   if (
+    m.includes('gpt-6-luna') ||
+    m.includes('gpt-5.6-terra') ||
+    m.includes('gpt-5.6-luna') ||
     m.includes('claude-fable-5-1') ||
     m.includes('claude-opus-5-5') ||
     m.includes('claude-sonnet-5-5') ||

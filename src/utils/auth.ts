@@ -10,7 +10,7 @@ import {
   logEvent,
 } from 'src/services/analytics/index.js'
 import { getModelStrings } from 'src/utils/model/modelStrings.js'
-import { getAPIProvider } from 'src/utils/model/providers.js'
+import { getAPIProvider, setCodexProviderActive } from 'src/utils/model/providers.js'
 import {
   getIsNonInteractiveSession,
   preferThirdPartyAuthentication,
@@ -1329,8 +1329,28 @@ export function saveCodexOAuthTokens(tokens: CodexTokens): void {
       refreshToken: tokens.refreshToken,
       expiresAt: tokens.expiresAt,
       accountId: tokens.accountId,
+      active: true,
     },
   }))
+  setCodexProviderActive(true)
+}
+
+/**
+ * Explicitly switches between stored Codex authentication and the other
+ * configured provider without discarding the saved Codex refresh token.
+ */
+export function setCodexOAuthActive(active: boolean): void {
+  saveGlobalConfig(cfg => {
+    if (!cfg.codexOAuth) return cfg
+    return {
+      ...cfg,
+      codexOAuth: {
+        ...cfg.codexOAuth,
+        active,
+      },
+    }
+  })
+  setCodexProviderActive(active)
 }
 
 /**
@@ -1364,6 +1384,7 @@ export function clearCodexOAuthTokens(): void {
     const { codexOAuth: _removed, ...rest } = cfg
     return rest as typeof cfg
   })
+  setCodexProviderActive(false)
 }
 
 

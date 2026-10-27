@@ -221,6 +221,30 @@ export const GPT_5_4_MINI_CONFIG = {
   openai: 'gpt-5.4-mini',
 } as const satisfies ModelConfig
 
+export const GPT_6_LUNA_CONFIG = {
+  firstParty: 'gpt-6-luna',
+  bedrock: 'gpt-6-luna',
+  vertex: 'gpt-6-luna',
+  foundry: 'gpt-6-luna',
+  openai: 'gpt-6-luna',
+} as const satisfies ModelConfig
+
+export const GPT_5_6_TERRA_CONFIG = {
+  firstParty: 'gpt-5.6-terra',
+  bedrock: 'gpt-5.6-terra',
+  vertex: 'gpt-5.6-terra',
+  foundry: 'gpt-5.6-terra',
+  openai: 'gpt-5.6-terra',
+} as const satisfies ModelConfig
+
+export const GPT_5_6_LUNA_CONFIG = {
+  firstParty: 'gpt-5.6-luna',
+  bedrock: 'gpt-5.6-luna',
+  vertex: 'gpt-5.6-luna',
+  foundry: 'gpt-5.6-luna',
+  openai: 'gpt-5.6-luna',
+} as const satisfies ModelConfig
+
 export const CLAUDE_FABLE_5_CONFIG = {
   firstParty: 'claude-fable-5',
   bedrock: 'anthropic.claude-fable-5',
@@ -267,6 +291,9 @@ export const ALL_MODEL_CONFIGS = {
   gpt54: GPT_5_4_CONFIG,
   gpt53codex: GPT_5_3_CODEX_CONFIG,
   gpt54mini: GPT_5_4_MINI_CONFIG,
+  gpt6luna: GPT_6_LUNA_CONFIG,
+  gpt56terra: GPT_5_6_TERRA_CONFIG,
+  gpt56luna: GPT_5_6_LUNA_CONFIG,
 } as const satisfies Record<string, ModelConfig>
 
 export type ModelKey = keyof typeof ALL_MODEL_CONFIGS

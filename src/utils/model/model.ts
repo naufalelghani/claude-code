@@ -36,6 +36,7 @@ import { ALL_MODEL_CONFIGS } from './configs.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { normalizeClaudeModelFamily } from './currentClaudeModels.js'
+import { normalizeCodexModelSelection } from '../../services/api/codex-models.js'
 import { capitalize } from '../stringUtils.js'
 
 export type ModelShortName = string
@@ -69,6 +70,12 @@ export function normalizeModelSettingForPicker(
   if (setting === null) return null
 
   const trimmed = setting.trim()
+  // When Codex is active, migrate saved Codex/Claude picker values to a model
+  // actually present in the Codex catalog instead of rendering a stale custom entry.
+  if (isCodexSubscriber()) {
+    const codexSelection = normalizeCodexModelSelection(trimmed)
+    if (codexSelection) return codexSelection
+  }
   return normalizeClaudeModelFamily(trimmed) ?? trimmed
 }
 
@@ -83,15 +90,19 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
   }
 
-  // Check the existing value first so a saved allowlist cannot be bypassed by
-  // rewriting an old model ID to its current family alias.
-  if (specifiedModel && !isModelAllowed(specifiedModel)) {
+  const codexActive = isCodexSubscriber()
+
+  // availableModels is the Claude model allowlist; it must not block the
+  // separately authenticated Codex catalog or reject a selected Codex model.
+  // For Claude sessions, check before normalization so aliases cannot bypass
+  // a deliberately narrowed family allowlist.
+  if (specifiedModel && !codexActive && !isModelAllowed(specifiedModel)) {
     return undefined
   }
 
   if (specifiedModel) {
     specifiedModel = normalizeModelSettingForPicker(specifiedModel) as ModelSetting
-    if (!isModelAllowed(specifiedModel)) {
+    if (!codexActive && !isModelAllowed(specifiedModel)) {
       return undefined
     }
   }
@@ -203,7 +214,7 @@ export function getRuntimeMainLoopModel(params: {
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
   if (isCodexSubscriber()) {
-    return getModelStrings().gpt53codex
+    return getModelStrings().gpt6luna
   }
 
   // Keep the default on the current Opus model for Ant builds as well.
@@ -408,7 +419,7 @@ export function getClaudeAiUserDefaultModelDescription(
   fastMode = false,
 ): string {
   if (isCodexSubscriber()) {
-    return 'GPT-5.3 Codex · Optimized for code generation and understanding'
+    return 'GPT-6 Luna · Fast and efficient for focused coding tasks'
   }
   if (isMaxSubscriber() || isTeamPremiumSubscriber()) {
     const fastPricing =
@@ -473,6 +484,9 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
   if (model.includes('gpt-') || model.includes('codex')) {
+    if (model === 'gpt-6-luna') return 'GPT-6 Luna'
+    if (model === 'gpt-5.6-terra') return 'GPT-5.6 Terra'
+    if (model === 'gpt-5.6-luna') return 'GPT-5.6 Luna'
     if (model === 'gpt-5.2-codex') return 'Codex 5.2'
     if (model === 'gpt-5.1-codex') return 'Codex 5.1'
     if (model === 'gpt-5.1-codex-mini') return 'Codex 5.1 Mini'
@@ -836,6 +850,15 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
     return 'Mythos 5'
   }
   // OpenAI Codex models
+  if (canonical.includes('gpt-6-luna')) {
+    return 'GPT-6 Luna'
+  }
+  if (canonical.includes('gpt-5.6-terra')) {
+    return 'GPT-5.6 Terra'
+  }
+  if (canonical.includes('gpt-5.6-luna')) {
+    return 'GPT-5.6 Luna'
+  }
   if (canonical.includes('gpt-5.4-mini')) {
     return 'GPT-5.4 Mini'
   }

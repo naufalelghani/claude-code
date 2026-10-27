@@ -102,6 +102,15 @@ export function modelSupportsThinking(model: string): boolean {
   const canonical = getCanonicalName(model)
   const provider = getAPIProvider()
 
+  // The selected Codex models support the Responses API reasoning controls.
+  if (
+    canonical.includes('gpt-6-luna') ||
+    canonical.includes('gpt-5.6-terra') ||
+    canonical.includes('gpt-5.6-luna')
+  ) {
+    return true
+  }
+
   // Anthropic documents thinking support for all four current models across
   // first-party and partner platforms.
   if (
@@ -128,6 +137,14 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
     return supported3P
   }
   const canonical = getCanonicalName(model)
+  // Codex exposes reasoning effort through the Responses API.
+  if (
+    canonical.includes('gpt-6-luna') ||
+    canonical.includes('gpt-5.6-terra') ||
+    canonical.includes('gpt-5.6-luna')
+  ) {
+    return true
+  }
   // All four current Claude models support adaptive thinking.
   if (
     canonical.includes('claude-fable-5-1') ||
