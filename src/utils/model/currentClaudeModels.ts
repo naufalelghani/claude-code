@@ -47,7 +47,7 @@ export function normalizeClaudeModelFamily(
   const model = modelInput
     .trim()
     .toLowerCase()
-    .replace(/\\[1m\\]$/i, '')
+    .replace(/\[1m\]$/i, '')
     .trim()
 
   if (!model) return null
