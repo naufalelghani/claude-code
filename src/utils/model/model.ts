@@ -15,7 +15,7 @@ import {
   isProSubscriber,
   isTeamPremiumSubscriber,
 } from '../auth.js'
-import { getAntModelOverrideConfig, resolveAntModel } from './antModels.js'
+import { resolveAntModel } from './antModels.js'
 import {
   has1mContext,
   is1mContextDisabled,
@@ -419,6 +419,19 @@ export function getSystemPromptModel(modelInput: ModelName): ModelName {
     .replace(/\[1m\]$/i, '')
     .trim()
 
+  const currentFamily = normalizeModelSettingForPicker(modelInput)
+  switch (currentFamily) {
+    case 'fable':
+      return getCanonicalName(getDefaultFableModel())
+    case 'opus':
+      return getCanonicalName(getDefaultOpusModel())
+    case 'sonnet':
+      return getCanonicalName(getDefaultSonnetModel())
+    case 'haiku':
+      return getCanonicalName(getDefaultHaikuModel())
+  }
+
+  // Keep the access restriction as a fallback for unknown Mythos codename forms.
   if (
     isRestrictedMythosModel(normalized) &&
     !isInternalSubscriber() &&
@@ -433,22 +446,7 @@ export function getSystemPromptModel(modelInput: ModelName): ModelName {
     return getCanonicalName(modelConfig.firstParty)
   }
 
-  switch (normalized) {
-    case 'opusplan':
-    case 'sonnet':
-      return getCanonicalName(getDefaultSonnetModel())
-    case 'haiku':
-      return getCanonicalName(getDefaultHaikuModel())
-    case 'opus':
-    case 'best':
-      return getCanonicalName(getDefaultOpusModel())
-    case 'fable':
-      return getCanonicalName(getDefaultFableModel())
-    case 'mythos':
-      return getCanonicalName(getDefaultMythosModel())
-    default:
-      return getCanonicalName(modelInput)
-  }
+  return getCanonicalName(modelInput)
 }
 
 // @[MODEL LAUNCH]: Update the default model description strings shown to users.
@@ -472,7 +470,7 @@ export function renderDefaultModelSetting(
   setting: ModelName | ModelAlias,
 ): string {
   if (setting === 'opusplan') {
-    return 'Opus 5.5 in plan mode, else Sonnet 5.5'
+    return 'Opus 5.5'
   }
   return renderModelName(parseUserSpecifiedModel(setting))
 }
@@ -506,7 +504,7 @@ export function isOpus1mMergeEnabled(): boolean {
 
 export function renderModelSetting(setting: ModelName | ModelAlias): string {
   if (setting === 'opusplan') {
-    return 'Opus Plan'
+    return 'Opus 5.5'
   }
   if (isModelAlias(setting)) {
     return capitalize(setting)
