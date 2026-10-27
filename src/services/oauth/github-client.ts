@@ -19,42 +19,45 @@ interface GitHubOAuthConfig {
   clientId: string
   clientSecret: string
   redirectUri: string
+  appSlug: string
 }
 
 // Get GitHub OAuth config from environment or settings
 export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
   const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID
   const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
+  const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG
 
-  if (!clientId || !clientSecret) {
+  if (!clientId || !clientSecret || !appSlug) {
     return null
   }
 
   return {
     clientId,
     clientSecret,
+    appSlug,
     redirectUri: getOauthConfig().MANUAL_REDIRECT_URL
   }
 }
 
 /**
- * Build the GitHub OAuth authorization URL
+ * Build the GitHub App installation URL used by the organization login flow.
+ *
+ * The GitHub App must be configured to request user authorization during
+ * installation and use getOauthConfig().MANUAL_REDIRECT_URL as its callback.
+ * GitHub will then return an authorization code that the CLI can exchange for
+ * a user access token and use to verify both installation and membership.
  */
-export function buildGitHubAuthUrl(codeChallenge: string, state: string): string {
+export function buildGitHubInstallUrl(state: string): string {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error('GitHub OAuth not configured')
+    throw new Error(
+      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
+    )
   }
 
-  const url = new URL(`${GITHUB_OAUTH_BASE_URL}/login/oauth/authorize`)
-  url.searchParams.append('client_id', config.clientId)
-  url.searchParams.append('redirect_uri', config.redirectUri)
-  url.searchParams.append('response_type', 'code')
-  url.searchParams.append('scope', GITHUB_OAUTH_SCOPES)
-  url.searchParams.append('state', state)
-  url.searchParams.append('code_challenge', codeChallenge)
-  url.searchParams.append('code_challenge_method', 'S256')
-
+  const url = new URL(`${GITHUB_OAUTH_BASE_URL}/apps/${encodeURIComponent(config.appSlug)}/installations/new`)
+  url.searchParams.set('state', state)
   return url.toString()
 }
 
@@ -83,7 +86,6 @@ export async function exchangeGitHubCodeForToken(
         redirect_uri: config.redirectUri,
         code: authorizationCode,
         code_verifier: codeVerifier,
-        state: codeVerifier, // Using codeVerifier as state for PKCE
       },
       {
         headers: {
@@ -110,18 +112,76 @@ export async function exchangeGitHubCodeForToken(
 }
 
 /**
- * Verify that the user is a member of the Anthropic GitHub organization
+ * Verify the GitHub App is installed on the required organization and that the
+ * authenticated user can access that installation. This endpoint is scoped to
+ * the GitHub App represented by this user access token.
+ */
+export async function verifyGitHubAppInstallation(
+  accessToken: string,
+): Promise<boolean> {
+  const config = getGitHubOAuthConfig()
+  if (!config) {
+    throw new Error(
+      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
+    )
+  }
+
+  try {
+    for (let page = 1; page <= 100; page += 1) {
+      const response = await axios.get(
+        `${GITHUB_API_BASE_URL}/user/installations`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          params: { per_page: 100, page },
+          timeout: 10000,
+        },
+      )
+
+      const installations = response.data?.installations ?? []
+      const hasRequiredInstallation = installations.some(
+        (installation: { app_slug?: string; target_type?: string; account?: { login?: string } }) =>
+          installation.app_slug?.toLowerCase() === config.appSlug.toLowerCase() &&
+          installation.target_type === 'Organization' &&
+          installation.account?.login?.toLowerCase() === INTERNAL_ORG.toLowerCase(),
+      )
+
+      if (hasRequiredInstallation) return true
+      if (
+        installations.length < 100 ||
+        (typeof response.data?.total_count === 'number' &&
+          page * 100 >= response.data.total_count)
+      ) {
+        return false
+      }
+    }
+
+    return false
+  } catch (error) {
+    logError(error as Error, 'GitHub App installation verification failed')
+    return false
+  }
+}
+
+/**
+ * Verify that the authenticated user is an active member of the required
+ * GitHub organization. This endpoint describes the current user, not all
+ * organization members.
  */
 export async function verifyGitHubOrgMembership(
   accessToken: string,
 ): Promise<boolean> {
   try {
     const response = await axios.get(
-      `${GITHUB_API_BASE_URL}/orgs/${INTERNAL_ORG}/memberships`,
+      `${GITHUB_API_BASE_URL}/user/memberships/orgs/${encodeURIComponent(INTERNAL_ORG)}`,
       {
         headers: {
-          Authorization: `token ${accessToken}`,
-          Accept: 'application/vnd.github.v3+json',
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
         },
         timeout: 10000,
       },
@@ -135,7 +195,6 @@ export async function verifyGitHubOrgMembership(
       status: response.status,
       state: response.data?.state,
     })
-
     return false
   } catch (error) {
     logError(error as Error, 'GitHub org membership verification failed')
@@ -201,12 +260,19 @@ export async function githubOAuthFlow(
     return null
   }
 
-  // Verify organization membership
-  const isOrgMember = await verifyGitHubOrgMembership(tokenResponse.accessToken)
+  // Require both the GitHub App installation and active membership. Neither
+  // check can substitute for the other.
+  const isAppInstalled = await verifyGitHubAppInstallation(tokenResponse.accessToken)
+  if (!isAppInstalled) {
+    throw new Error(
+      `The GitHub App must be installed on the ${INTERNAL_ORG} organization before you can log in.`,
+    )
+  }
 
+  const isOrgMember = await verifyGitHubOrgMembership(tokenResponse.accessToken)
   if (!isOrgMember) {
     throw new Error(
-      'You must be a member of the Anthropic GitHub organization to use this login method.',
+      `Your GitHub account must have active membership in the ${INTERNAL_ORG} organization to use this login method.`,
     )
   }
 
