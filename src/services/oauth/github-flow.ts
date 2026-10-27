@@ -58,8 +58,6 @@ export async function startGitHubOAuthFlow(
       device.interval,
       device.expiresIn,
     )
-    onStatusUpdate({ state: 'creating_api_key' })
-
     const result = await githubOAuthFlowWithAccessToken(githubAccessToken)
     if (!result) throw new Error('Failed to exchange GitHub device authorization for an internal token')
 
@@ -94,13 +92,12 @@ export async function handleGitHubManualCode(
   try {
     logEvent('tengu_oauth_github_manual_entry', {})
 
-    // Exchange GitHub code for Anthropic OAuth token
-    onStatusUpdate({ state: 'creating_api_key' })
+    // Validate GitHub code and persist a local GitHub login session
 
     const result = await githubOAuthExchangeCode(authorizationCode, codeVerifier)
 
     if (!result) {
-      throw new Error('Failed to exchange GitHub code for Anthropic token')
+      throw new Error('Failed to complete GitHub login.')
     }
 
     if (!result.user) {
