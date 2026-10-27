@@ -38,6 +38,8 @@ type OAuthStatus = {
 | {
   state: 'waiting_for_login';
   url: string;
+  userCode?: string;
+  deviceFlow?: boolean;
 } // Browser opened, waiting for user to login
 | {
   state: 'creating_api_key';
@@ -328,11 +330,8 @@ export function ConsoleOAuthFlow({
   const startGitHubOAuth = useCallback(async () => {
     try {
       logEvent('tengu_oauth_github_flow_start', {});
-      // Generate a one-time state and a PKCE verifier/challenge for this user.
-      const codeVerifier = crypto.randomBytes(32).toString('base64url');
-      const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
-      const state = crypto.randomBytes(16).toString('base64url');
-      githubOAuthSessionRef.current = { state, codeVerifier };
+      // Device Flow uses a one-time GitHub user code and does not need a Client Secret.
+      githubOAuthSessionRef.current = null;
       setShowPastePrompt(false);
 
       // Authenticate the current GitHub user. If the organization App is not
@@ -341,12 +340,20 @@ export function ConsoleOAuthFlow({
       await startGitHubOAuthFlow(
         (status) => {
           setOAuthStatus(status);
-          if (status.state === 'waiting_for_login') {
+          if (status.state === 'waiting_for_login' && !status.deviceFlow) {
             setTimeout(setShowPastePrompt, 3000, true);
           }
+          if (status.deviceFlow) setShowPastePrompt(false);
         },
-        state,
-        codeChallenge,
+        () => {
+          githubOAuthSessionRef.current = null;
+          setShowPastePrompt(false);
+          void sendNotification({
+            message: 'GitHub login successful',
+            notificationType: 'auth_success'
+          }, terminal);
+          onDone();
+        },
       );
     } catch (err) {
       const msg = (err as Error).message;
@@ -411,7 +418,7 @@ export function ConsoleOAuthFlow({
     };
   }, [oauthService]);
   return <Box flexDirection="column" gap={1}>
-      {oauthStatus.state === 'waiting_for_login' && showPastePrompt && <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
+      {oauthStatus.state === 'waiting_for_login' && (showPastePrompt || oauthStatus.deviceFlow) && <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
           <Box paddingX={1}>
             <Text dimColor>
               Browser didn&apos;t open? Use the url below to sign in{' '}
@@ -423,6 +430,9 @@ export function ConsoleOAuthFlow({
           <Link url={oauthStatus.url}>
             <Text dimColor>{oauthStatus.url}</Text>
           </Link>
+          {oauthStatus.deviceFlow && oauthStatus.userCode && <Box paddingX={1}>
+            <Text color="warning">Enter this code at GitHub: {oauthStatus.userCode}</Text>
+          </Box>}
         </Box>}
       {mode === 'setup-token' && oauthStatus.state === 'success' && oauthStatus.token && <Box key="tokenOutput" flexDirection="column" gap={1} paddingTop={1}>
             <Text color="success">
