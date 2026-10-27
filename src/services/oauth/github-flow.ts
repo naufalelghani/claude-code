@@ -7,20 +7,6 @@ import { buildGitHubInstallUrl, githubOAuthExchangeCode } from './github-client.
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
-import crypto from 'crypto'
-
-// PKCE utilities for GitHub OAuth flow
-function generateCodeVerifier(): string {
-  return base64URLEncode(crypto.randomBytes(32))
-}
-
-function base64URLEncode(buffer: Buffer): string {
-  return buffer.toString('base64url')
-}
-
-function generateState(): string {
-  return base64URLEncode(crypto.randomBytes(16))
-}
 
 /**
  * Start the GitHub OAuth flow for internal team members.
@@ -80,8 +66,6 @@ export async function startGitHubOAuthFlow(
  */
 export async function handleGitHubManualCode(
   authorizationCode: string,
-  state: string,
-  codeVerifier: string,
   onStatusUpdate: (status: OAuthStatus) => void,
   onLoginSuccess: () => void,
 ): Promise<void> {
@@ -91,7 +75,7 @@ export async function handleGitHubManualCode(
     // Exchange GitHub code for Anthropic OAuth token
     onStatusUpdate({ state: 'creating_api_key' })
 
-    const result = await githubOAuthExchangeCode(authorizationCode, codeVerifier)
+    const result = await githubOAuthExchangeCode(authorizationCode)
 
     if (!result) {
       throw new Error('Failed to exchange GitHub code for Anthropic token')
