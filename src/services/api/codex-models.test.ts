@@ -4,6 +4,7 @@ import {
   DEFAULT_CODEX_MODEL,
   isCodexModel,
   mapClaudeModelToCodex,
+  normalizeCodexModelSelection,
 } from './codex-models.js'
 
 describe('Codex model catalog', () => {
@@ -41,5 +42,12 @@ describe('Codex model catalog', () => {
     expect(mapClaudeModelToCodex('gpt-5.4-mini')).toBe('gpt-5.6-luna')
     expect(mapClaudeModelToCodex('opus')).toBe('gpt-5.6-terra')
     expect(mapClaudeModelToCodex('haiku')).toBe('gpt-5.6-luna')
+  })
+
+  test('normalizes recognized saved model settings for the Codex picker', () => {
+    expect(normalizeCodexModelSelection('gpt-5.4')).toBe('gpt-5.6-terra')
+    expect(normalizeCodexModelSelection('opus')).toBe('gpt-5.6-terra')
+    expect(normalizeCodexModelSelection('claude-haiku-5-5')).toBe('gpt-5.6-luna')
+    expect(normalizeCodexModelSelection('custom-corp-deployment')).toBeNull()
   })
 })
