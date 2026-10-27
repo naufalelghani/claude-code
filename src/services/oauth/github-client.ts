@@ -1,4 +1,4 @@
-// GitHub OAuth service for internal Anthropic team members
+// GitHub App authentication and organization membership checks
 import axios from 'axios'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logError } from '../../utils/log.js'
@@ -7,9 +7,6 @@ import { logForDebugging } from '../../utils/debug.js'
 const GITHUB_OAUTH_BASE_URL = 'https://github.com'
 const GITHUB_API_BASE_URL = 'https://api.github.com'
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
-
-// GitHub OAuth scopes needed for organization membership verification
-const GITHUB_OAUTH_SCOPES = ['read:user', 'read:org'].join(' ')
 
 // Internal organization GitHub - only members of this org can use GitHub login
 const INTERNAL_ORG = 'BYV-Dev-Unorganization'
@@ -66,14 +63,12 @@ export function buildGitHubInstallUrl(state: string): string {
  */
 export async function exchangeGitHubCodeForToken(
   authorizationCode: string,
-): Promise<{
-  accessToken: string
-  scope: string[]
-  tokenType: string
-} | null> {
+): Promise<{ accessToken: string } | null> {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error('GitHub OAuth not configured')
+    throw new Error(
+      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
+    )
   }
 
   try {
@@ -100,13 +95,41 @@ export async function exchangeGitHubCodeForToken(
 
     return {
       accessToken: response.data.access_token,
-      scope: response.data.scope?.split(' ') ?? GITHUB_OAUTH_SCOPES.split(' '),
-      tokenType: response.data.token_type,
     }
   } catch (error) {
     logError(error as Error, 'GitHub OAuth token exchange failed')
     return null
   }
+}
+
+/**
+ * Pure predicates kept separately so the installation and membership rules
+ * can be covered by unit tests without making live GitHub API requests.
+ */
+export function hasRequiredGitHubAppInstallation(
+  installations: unknown,
+  appSlug: string,
+  organization: string,
+): boolean {
+  if (!Array.isArray(installations)) return false
+
+  return installations.some((value: unknown) => {
+    if (typeof value !== 'object' || value === null) return false
+    const installation = value as {
+      app_slug?: string
+      target_type?: string
+      account?: { login?: string }
+    }
+    return (
+      installation.app_slug?.toLowerCase() === appSlug.toLowerCase() &&
+      installation.target_type === 'Organization' &&
+      installation.account?.login?.toLowerCase() === organization.toLowerCase()
+    )
+  })
+}
+
+export function isActiveGitHubOrgMembershipState(state: unknown): boolean {
+  return state === 'active'
 }
 
 /**
@@ -140,14 +163,9 @@ export async function verifyGitHubAppInstallation(
       )
 
       const installations = response.data?.installations ?? []
-      const hasRequiredInstallation = installations.some(
-        (installation: { app_slug?: string; target_type?: string; account?: { login?: string } }) =>
-          installation.app_slug?.toLowerCase() === config.appSlug.toLowerCase() &&
-          installation.target_type === 'Organization' &&
-          installation.account?.login?.toLowerCase() === INTERNAL_ORG.toLowerCase(),
-      )
-
-      if (hasRequiredInstallation) return true
+      if (hasRequiredGitHubAppInstallation(installations, config.appSlug, INTERNAL_ORG)) {
+        return true
+      }
       if (
         installations.length < 100 ||
         (typeof response.data?.total_count === 'number' &&
@@ -185,7 +203,7 @@ export async function verifyGitHubOrgMembership(
       },
     )
 
-    if (response.status === 200 && response.data.state === 'active') {
+    if (response.status === 200 && isActiveGitHubOrgMembershipState(response.data.state)) {
       return true
     }
 
@@ -212,8 +230,9 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
   try {
     const response = await axios.get(`${GITHUB_API_BASE_URL}/user`, {
       headers: {
-        Authorization: `token ${accessToken}`,
-        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
       },
       timeout: 10000,
     })
@@ -221,7 +240,7 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
     return {
       login: response.data.login,
       name: response.data.name ?? response.data.login,
-      email: response.data.email ?? response.data.email,
+      email: response.data.email ?? '',
       avatarUrl: response.data.avatar_url,
     }
   } catch (error) {
