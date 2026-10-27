@@ -7,12 +7,16 @@ import {
   CLAUDE_3_5_HAIKU_CONFIG,
   CLAUDE_3_5_V2_SONNET_CONFIG,
   CLAUDE_3_7_SONNET_CONFIG,
+  CLAUDE_FABLE_5_1_CONFIG,
   CLAUDE_HAIKU_4_5_CONFIG,
+  CLAUDE_HAIKU_5_5_CONFIG,
   CLAUDE_OPUS_4_1_CONFIG,
   CLAUDE_OPUS_4_5_CONFIG,
   CLAUDE_OPUS_4_6_CONFIG,
   CLAUDE_OPUS_4_CONFIG,
+  CLAUDE_OPUS_5_5_CONFIG,
   CLAUDE_SONNET_4_5_CONFIG,
+  CLAUDE_SONNET_5_5_CONFIG,
   CLAUDE_SONNET_4_6_CONFIG,
   CLAUDE_SONNET_4_CONFIG,
 } from './model/configs.js'
@@ -96,21 +100,39 @@ export const COST_TIER_10_50 = {
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
-// Pricing for Haiku 5.5: $1.25 input / $6.25 output per Mtok
+// Claude Haiku 5.5 standard pricing for prompts up to 100K tokens.
 export const COST_HAIKU_55 = {
-  inputTokens: 1.25,
-  outputTokens: 6.25,
-  promptCacheWriteTokens: 1.5625,
-  promptCacheReadTokens: 0.125,
+  inputTokens: 0.1,
+  outputTokens: 0.5,
+  promptCacheWriteTokens: 0.125,
+  promptCacheReadTokens: 0.01,
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
-// Pricing for Opus 5.5 (Claude 5 class): $10 input / $50 output per Mtok
+// Claude Haiku 5.5 pricing for prompts over 100K tokens.
+export const COST_HAIKU_55_LONG_CONTEXT = {
+  inputTokens: 0.4,
+  outputTokens: 2,
+  promptCacheWriteTokens: 0.5,
+  promptCacheReadTokens: 0.04,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Claude Opus 5.5 standard pricing: $4 input / $20 output per Mtok.
 export const COST_OPUS_55 = {
-  inputTokens: 10,
-  outputTokens: 50,
-  promptCacheWriteTokens: 12.5,
-  promptCacheReadTokens: 1,
+  inputTokens: 4,
+  outputTokens: 20,
+  promptCacheWriteTokens: 5,
+  promptCacheReadTokens: 0.2,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Claude Opus 5.5 fast-mode pricing: $8 input / $40 output per Mtok.
+export const COST_OPUS_55_FAST = {
+  inputTokens: 8,
+  outputTokens: 40,
+  promptCacheWriteTokens: 10,
+  promptCacheReadTokens: 0.4,
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
@@ -123,12 +145,12 @@ export const COST_SONNET_5 = {
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
-// Pricing for Sonnet 5.5: $3 input / $15 output per Mtok
+// Claude Sonnet 5.5 standard pricing: $2 input / $10 output per Mtok.
 export const COST_SONNET_55 = {
-  inputTokens: 3,
-  outputTokens: 15,
-  promptCacheWriteTokens: 3.75,
-  promptCacheReadTokens: 0.3,
+  inputTokens: 2,
+  outputTokens: 10,
+  promptCacheWriteTokens: 2.5,
+  promptCacheReadTokens: 0.1,
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
@@ -137,7 +159,7 @@ export const COST_FABLE_51 = {
   inputTokens: 10,
   outputTokens: 50,
   promptCacheWriteTokens: 12.5,
-  promptCacheReadTokens: 1,
+  promptCacheReadTokens: 0.25,
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 const DEFAULT_UNKNOWN_MODEL_COST = COST_TIER_5_25
@@ -177,6 +199,14 @@ export const MODEL_COSTS: Record<ModelShortName, ModelCosts> = {
     COST_TIER_5_25,
   [firstPartyNameToCanonical(CLAUDE_OPUS_4_6_CONFIG.firstParty)]:
     COST_TIER_5_25,
+  [firstPartyNameToCanonical(CLAUDE_FABLE_5_1_CONFIG.firstParty)]:
+    COST_FABLE_51,
+  [firstPartyNameToCanonical(CLAUDE_OPUS_5_5_CONFIG.firstParty)]:
+    COST_OPUS_55,
+  [firstPartyNameToCanonical(CLAUDE_SONNET_5_5_CONFIG.firstParty)]:
+    COST_SONNET_55,
+  [firstPartyNameToCanonical(CLAUDE_HAIKU_5_5_CONFIG.firstParty)]:
+    COST_HAIKU_55,
 }
 
 /**
@@ -198,7 +228,25 @@ function tokensToUSDCost(modelCosts: ModelCosts, usage: Usage): number {
 export function getModelCosts(model: string, usage: Usage): ModelCosts {
   const shortName = getCanonicalName(model)
 
-  // Check if this is an Opus 4.6 model with fast mode active.
+  // Claude Haiku 5.5 has a different price for prompts over 100K tokens.
+  if (
+    shortName === firstPartyNameToCanonical(CLAUDE_HAIKU_5_5_CONFIG.firstParty)
+  ) {
+    const promptTokens =
+      usage.input_tokens +
+      (usage.cache_read_input_tokens ?? 0) +
+      (usage.cache_creation_input_tokens ?? 0)
+    return promptTokens > 100_000 ? COST_HAIKU_55_LONG_CONTEXT : COST_HAIKU_55
+  }
+
+  // Fast mode for Opus 5.5 is billed at the premium fast-mode rate.
+  if (
+    shortName === firstPartyNameToCanonical(CLAUDE_OPUS_5_5_CONFIG.firstParty)
+  ) {
+    return usage.speed === 'fast' ? COST_OPUS_55_FAST : COST_OPUS_55
+  }
+
+  // Keep existing fast-mode pricing for Opus 4.6 records.
   if (
     shortName === firstPartyNameToCanonical(CLAUDE_OPUS_4_6_CONFIG.firstParty)
   ) {
