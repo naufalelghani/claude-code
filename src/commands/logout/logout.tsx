@@ -47,6 +47,7 @@ export async function performLogout({
       }
     }
     updated.oauthAccount = undefined;
+    updated.githubOAuth = undefined;
     return updated;
   });
 }
