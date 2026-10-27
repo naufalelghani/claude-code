@@ -71,8 +71,10 @@ function getGitHubOAuthConfigErrorMessage(): string {
   if (!(process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF)) {
     missing.push('Client ID')
   }
+  // Device Flow does not require a Client Secret. The legacy authorization-code
+  // flow still checks for it at the point where the code is exchanged.
   if (!(process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA)) {
-    missing.push('Client Secret')
+    // Do not add Client Secret to the general config error: device flow can work without it.
   }
 
   if (missing.length === 1 && missing[0] === 'Client Secret') {
@@ -86,7 +88,7 @@ export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
   const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA
   const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037
 
-  if (!clientId || !clientSecret || !appSlug) {
+  if (!clientId || !appSlug) {
     return null
   }
 
@@ -133,6 +135,78 @@ export function buildGitHubInstallUrl(): string {
 }
 
 /**
+ * Start GitHub Device Flow. This is suitable for CLI clients and does not use
+ * a Client Secret. Device Flow must be enabled in the GitHub App settings.
+ */
+export async function requestGitHubDeviceCode(): Promise<{
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  interval: number
+  expiresIn: number
+}> {
+  const response = await axios.post(
+    `${GITHUB_OAUTH_BASE_URL}/login/device/code`,
+    { client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF },
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 15000 },
+  )
+  if (response.data?.error) {
+    if (response.data.error === 'device_flow_disabled') {
+      throw new Error('GitHub Device Flow is disabled. Enable Device Flow in the byv-dev-unorganization GitHub App settings, then retry login.')
+    }
+    throw new Error(response.data.error_description || response.data.error)
+  }
+  const data = response.data
+  if (!data?.device_code || !data?.user_code || !data?.verification_uri) {
+    throw new Error('GitHub did not return a valid device authorization code.')
+  }
+  return {
+    deviceCode: data.device_code,
+    userCode: data.user_code,
+    verificationUri: data.verification_uri,
+    interval: Math.max(5, Number(data.interval) || 5),
+    expiresIn: Math.max(60, Number(data.expires_in) || 900),
+  }
+}
+
+/**
+ * Poll GitHub until the user approves Device Flow, is denied, or the code
+ * expires. GitHub requires using the supplied polling interval.
+ */
+export async function pollGitHubDeviceCode(
+  deviceCode: string,
+  initialInterval: number,
+  expiresIn: number,
+): Promise<string> {
+  const deadline = Date.now() + expiresIn * 1000
+  let interval = Math.max(5, initialInterval)
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, interval * 1000))
+    if (Date.now() >= deadline) break
+    const response = await axios.post(
+      GITHUB_TOKEN_URL,
+      {
+        client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF,
+        device_code: deviceCode,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      },
+      { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 15000 },
+    )
+    if (response.data?.access_token) return response.data.access_token
+    const error = response.data?.error
+    if (error === 'authorization_pending') continue
+    if (error === 'slow_down') {
+      interval += 5
+      continue
+    }
+    if (error === 'access_denied') throw new Error('GitHub Device Flow authorization was denied.')
+    if (error === 'expired_token') throw new Error('GitHub device code expired. Restart /login and try again.')
+    if (error) throw new Error(response.data.error_description || `GitHub Device Flow failed: ${error}`)
+  }
+  throw new Error('GitHub device code expired. Restart /login and try again.')
+}
+
+/**
  * Exchange authorization code for GitHub access token
  */
 export async function exchangeGitHubCodeForToken(
@@ -142,6 +216,9 @@ export async function exchangeGitHubCodeForToken(
   const config = getGitHubOAuthConfig()
   if (!config) {
     throw new Error(getGitHubOAuthConfigErrorMessage())
+  }
+  if (!config.clientSecret) {
+    throw new Error('GitHub authorization-code flow requires a Client Secret. Use Device Flow for CLI login, or set GITHUB_OAUTH_CLIENT_SECRET.')
   }
 
   try {
@@ -371,10 +448,17 @@ export async function githubOAuthFlow(
   if (!tokenResponse) {
     return null
   }
+  return githubOAuthFlowWithAccessToken(tokenResponse.accessToken)
+}
 
+export async function githubOAuthFlowWithAccessToken(accessToken: string): Promise<{
+  accessToken: string
+  user: { login: string; name: string; email: string; avatarUrl: string }
+  subscriptionType: 'internal'
+} | null> {
   // Require both the GitHub App installation and active membership. Neither
   // check can substitute for the other.
-  const isAppInstalled = await verifyGitHubAppInstallation(tokenResponse.accessToken)
+  const isAppInstalled = await verifyGitHubAppInstallation(accessToken)
   if (!isAppInstalled) {
     const installUrl = buildGitHubInstallUrl()
     throw new Error(
@@ -382,7 +466,7 @@ export async function githubOAuthFlow(
     )
   }
 
-  const isOrgMember = await verifyGitHubOrgMembership(tokenResponse.accessToken)
+  const isOrgMember = await verifyGitHubOrgMembership(accessToken)
   if (!isOrgMember) {
     throw new Error(
       `Your GitHub account must have active membership in the ${INTERNAL_ORG} organization to use this login method.`,
@@ -390,7 +474,7 @@ export async function githubOAuthFlow(
   }
 
   // Get user info
-  const userInfo = await getGitHubUserInfo(tokenResponse.accessToken)
+  const userInfo = await getGitHubUserInfo(accessToken)
 
   if (!userInfo) {
     throw new Error('Failed to retrieve GitHub user information')
@@ -400,7 +484,7 @@ export async function githubOAuthFlow(
   const anthropicTokenResponse = await axios.post(
     `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange`,
     {
-      github_access_token: tokenResponse.accessToken,
+      github_access_token: accessToken,
     },
     {
       headers: {
