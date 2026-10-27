@@ -15,6 +15,7 @@ import {
   COST_HAIKU_45,
   COST_HAIKU_55,
   COST_OPUS_55,
+  COST_OPUS_55_FAST,
   COST_SONNET_5,
   COST_SONNET_55,
   COST_FABLE_51,
@@ -437,9 +438,10 @@ function getClaudeModelOption(
   }
 }
 
-function getAllPlanClaudeModelOptions(): ModelOption[] {
+function getAllPlanClaudeModelOptions(fastMode = false): ModelOption[] {
   const is3P = getAPIProvider() !== 'firstParty'
   const price = (formatted: string) => is3P ? '' : ` · ${formatted}`
+  const opusPrice = fastMode ? COST_OPUS_55_FAST : COST_OPUS_55
 
   return [
     {
@@ -451,7 +453,7 @@ function getAllPlanClaudeModelOptions(): ModelOption[] {
     {
       value: 'opus',
       label: 'Opus 5.5',
-      description: `Opus 5.5 · For long-running agentic coding and knowledge work${price(formatModelPricing(COST_OPUS_55))}`,
+      description: `Opus 5.5 · For long-running agentic coding and knowledge work${price(formatModelPricing(opusPrice))}`,
       descriptionForModel: 'Opus 5.5 - for long-running agentic coding and knowledge work',
     },
     {
@@ -485,7 +487,7 @@ function getModelOptionsBase(fastMode = false): ModelOption[] {
   }
 
   // All Claude-backed sessions expose only the four current model families.
-  return [getDefaultOptionForUser(fastMode), ...getAllPlanClaudeModelOptions()]
+  return [getDefaultOptionForUser(fastMode), ...getAllPlanClaudeModelOptions(fastMode)]
 }
 // @[MODEL LAUNCH]: Add the new model ID to the appropriate family pattern below
 // so the "newer version available" hint works correctly.
