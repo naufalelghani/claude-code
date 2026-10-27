@@ -53,7 +53,7 @@ type OAuthStatus = {
   message: string;
   toRetry?: OAuthStatus;
 };
-const PASTE_HERE_MSG = 'Paste code here if prompted > ';
+const PASTE_HERE_MSG = 'Paste code#state here > ';
 export function ConsoleOAuthFlow({
   onDone,
   startingMessage,
@@ -92,8 +92,8 @@ export function ConsoleOAuthFlow({
   // browser did not open automatically. In this flow we expect the user to
   // copy the code from the browser and paste it in the terminal
   const [showPastePrompt, setShowPastePrompt] = useState(false);
-  // Keep the one-time GitHub callback state and PKCE verifier for this login
-  // attempt so the pasted callback cannot be reused across sessions.
+  // Keep the one-time GitHub callback state for this login attempt so a
+  // pasted callback cannot be reused across sessions.
   const githubOAuthSessionRef = useRef<{ state: string } | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
   const textInputColumns = useTerminalSize().columns - PASTE_HERE_MSG.length - 1;
@@ -327,7 +327,7 @@ export function ConsoleOAuthFlow({
   const startGitHubOAuth = useCallback(async () => {
     try {
       logEvent('tengu_oauth_github_flow_start', {});
-      // Save state and PKCE verifier for the manual callback submitted below.
+      // Save the one-time state for the callback submitted below.
       const state = crypto.randomBytes(16).toString('base64url');
       githubOAuthSessionRef.current = { state };
       setShowPastePrompt(false);
