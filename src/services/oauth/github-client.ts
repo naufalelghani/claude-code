@@ -389,7 +389,7 @@ export async function githubOAuthFlow(
     email: string
     avatarUrl: string
   }
-  subscriptionType: 'internal'
+  subscriptionType: 'github'
 } | null> {
   // Exchange code for GitHub token
   const tokenResponse = await exchangeGitHubCodeForToken(
@@ -406,7 +406,7 @@ export async function githubOAuthFlow(
 export async function githubOAuthFlowWithAccessToken(accessToken: string): Promise<{
   accessToken: string
   user: { login: string; name: string; email: string; avatarUrl: string }
-  subscriptionType: 'internal'
+  subscriptionType: 'github'
 } | null> {
   // Require both the GitHub App installation and active membership. Neither
   // check can substitute for the other.
@@ -432,45 +432,13 @@ export async function githubOAuthFlowWithAccessToken(accessToken: string): Promi
     throw new Error('Failed to retrieve GitHub user information')
   }
 
-  // Exchange GitHub identity for an internal token. This endpoint must be
-  // implemented by the deployment's backend; it is not part of this CLI repo.
-  let anthropicTokenResponse
-  try {
-    anthropicTokenResponse = await axios.post(
-      `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange`,
-      {
-        github_access_token: accessToken,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        timeout: 15000,
-      },
-    )
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      throw new Error(
-        'GitHub authorization succeeded, but the internal token exchange endpoint returned HTTP 404: ' +
-        `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange. ` +
-        'This CLI repository does not implement that backend endpoint; deploy a backend that validates GitHub organization membership and issues the internal token before this login method can complete.',
-      )
-    }
-    throw error
-  }
-
-  if (anthropicTokenResponse.status !== 200) {
-    throw new Error(
-      `Failed to exchange GitHub token: ${anthropicTokenResponse.statusText}`,
-    )
-  }
-
+  // The CLI's GitHub login ends with a verified GitHub identity. Keep this
+  // token labeled as GitHub auth; do not send it to Anthropic as an OAuth token.
   return {
-    accessToken: anthropicTokenResponse.data.access_token,
+    accessToken,
     user: userInfo,
-    subscriptionType: 'internal',
-  }
-}
+    subscriptionType: 'github',
+  }}
 
 /**
  * Exchange GitHub OAuth code and get Anthropic internal token
@@ -487,7 +455,7 @@ export async function githubOAuthExchangeCode(
     email: string
     avatarUrl: string
   } | null
-  subscriptionType: 'internal'
+  subscriptionType: 'github'
 } | null> {
   return githubOAuthFlow(authorizationCode, codeVerifier)
 }
