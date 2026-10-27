@@ -18,15 +18,14 @@ Configure the GitHub App before enabling this login method:
 
 ## Runtime configuration
 
-The source includes defaults for the public App identifiers: the slug `byv-dev-unorganization` and Client ID. These can still be overridden with environment variables:
+The CLI uses GitHub's Device Flow for organization login. This flow is designed for CLI/headless applications and does **not** require a Client Secret, so the repository does not embed one.
 
-- `GITHUB_APP_SLUG` (or `CLAUDE_CODE_GITHUB_APP_SLUG`): the GitHub App slug used in the installation URL.
-- `GITHUB_OAUTH_CLIENT_ID` (or `CLAUDE_CODE_GITHUB_CLIENT_ID`): the Client ID from that GitHub App.
-- `GITHUB_OAUTH_CLIENT_SECRET` (or `CLAUDE_CODE_GITHUB_CLIENT_SECRET`): the Client Secret from that GitHub App.
+The source includes defaults for the public App identifiers: slug `byv-dev-unorganization` and Client ID. These can be overridden with environment variables:
 
-The public source deliberately leaves `X9CDJSA` empty. For a one-machine local build without environment variables, place a newly generated Client Secret in `X9CDJSA` in your local working copy only; do not commit or push that change. The confusing variable name is not encryption or protection.
+- `GITHUB_APP_SLUG` (or `CLAUDE_CODE_GITHUB_APP_SLUG`): GitHub App slug used in the installation URL.
+- `GITHUB_OAUTH_CLIENT_ID` (or `CLAUDE_CODE_GITHUB_CLIENT_ID`): Client ID from the GitHub App settings.
 
-A CLI is a public client: its embedded Client Secret can be extracted. PKCE helps protect the authorization flow, but the secret must not be treated as the security boundary for internal access. The server issuing the internal token must independently validate the GitHub identity, App installation, and active organization membership.
+**One-time GitHub App setup:** enable **Device Flow** in the GitHub App settings for `byv-dev-unorganization`. Without this setting, GitHub returns `device_flow_disabled`. No Client Secret needs to be added to source or environment for this flow. The older authorization-code helper still requires `GITHUB_OAUTH_CLIENT_SECRET` if called directly, but the CLI's organization-login path does not use it.
 
 ## User flow
 
