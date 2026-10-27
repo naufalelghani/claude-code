@@ -27,11 +27,40 @@ export type CodexModelId = (typeof CODEX_MODELS)[number]['id']
 export const DEFAULT_CODEX_MODEL: CodexModelId = 'gpt-6-luna'
 
 const CODEX_MODEL_IDS = new Set<string>(CODEX_MODELS.map(model => model.id))
+const LEGACY_CODEX_MODEL_IDS = new Set([
+  'gpt-5.3-codex',
+  'gpt-5.2-codex',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-mini',
+  'gpt-5.1-codex-max',
+  'gpt-5.4',
+  'gpt-5.4-mini',
+  'gpt-5.2',
+])
 
 /** Returns true only for IDs in the picker catalog. */
 export function isCodexModel(model: string): boolean {
   const normalized = model.trim().toLowerCase().replace(/\[(?:1|2)m\]$/i, '')
   return CODEX_MODEL_IDS.has(normalized)
+}
+
+/**
+ * Normalize a stored picker setting only when it is a recognized current or
+ * legacy Codex/Claude choice. Unknown custom model IDs are left untouched.
+ */
+export function normalizeCodexModelSelection(model: string): CodexModelId | null {
+  const normalized = model.trim().toLowerCase().replace(/\[(?:1|2)m\]$/i, '')
+  if (CODEX_MODEL_IDS.has(normalized)) return normalized as CodexModelId
+
+  const isClaudeFamily =
+    /^(opus|sonnet|haiku|fable|mythos)(?:$|[0-9])/.test(normalized) ||
+    /^claude-(?:opus|sonnet|haiku|fable|mythos)-/.test(normalized) ||
+    /^claude-3-(?:7-sonnet|5-sonnet|5-haiku|opus|sonnet|haiku)-?/.test(normalized)
+
+  if (LEGACY_CODEX_MODEL_IDS.has(normalized) || isClaudeFamily || normalized === 'best' || normalized === 'opusplan') {
+    return mapClaudeModelToCodex(normalized)
+  }
+  return null
 }
 
 /**
