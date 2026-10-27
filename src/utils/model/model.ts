@@ -203,7 +203,7 @@ export function getRuntimeMainLoopModel(params: {
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
   if (isCodexSubscriber()) {
-    return getModelStrings().gpt53codex
+    return getModelStrings().gpt6luna
   }
 
   // Keep the default on the current Opus model for Ant builds as well.
@@ -408,7 +408,7 @@ export function getClaudeAiUserDefaultModelDescription(
   fastMode = false,
 ): string {
   if (isCodexSubscriber()) {
-    return 'GPT-5.3 Codex · Optimized for code generation and understanding'
+    return 'GPT-6 Luna · Fast and efficient for focused coding tasks'
   }
   if (isMaxSubscriber() || isTeamPremiumSubscriber()) {
     const fastPricing =
@@ -473,6 +473,9 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
   if (model.includes('gpt-') || model.includes('codex')) {
+    if (model === 'gpt-6-luna') return 'GPT-6 Luna'
+    if (model === 'gpt-5.6-terra') return 'GPT-5.6 Terra'
+    if (model === 'gpt-5.6-luna') return 'GPT-5.6 Luna'
     if (model === 'gpt-5.2-codex') return 'Codex 5.2'
     if (model === 'gpt-5.1-codex') return 'Codex 5.1'
     if (model === 'gpt-5.1-codex-mini') return 'Codex 5.1 Mini'
@@ -836,6 +839,15 @@ export function getMarketingNameForModel(modelId: string): string | undefined {
     return 'Mythos 5'
   }
   // OpenAI Codex models
+  if (canonical.includes('gpt-6-luna')) {
+    return 'GPT-6 Luna'
+  }
+  if (canonical.includes('gpt-5.6-terra')) {
+    return 'GPT-5.6 Terra'
+  }
+  if (canonical.includes('gpt-5.6-luna')) {
+    return 'GPT-5.6 Luna'
+  }
   if (canonical.includes('gpt-5.4-mini')) {
     return 'GPT-5.4 Mini'
   }
