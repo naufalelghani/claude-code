@@ -432,19 +432,32 @@ export async function githubOAuthFlowWithAccessToken(accessToken: string): Promi
     throw new Error('Failed to retrieve GitHub user information')
   }
 
-  // Exchange GitHub token for internal Anthropic OAuth token
-  const anthropicTokenResponse = await axios.post(
-    `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange`,
-    {
-      github_access_token: accessToken,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
+  // Exchange GitHub identity for an internal token. This endpoint must be
+  // implemented by the deployment's backend; it is not part of this CLI repo.
+  let anthropicTokenResponse
+  try {
+    anthropicTokenResponse = await axios.post(
+      `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange`,
+      {
+        github_access_token: accessToken,
       },
-      timeout: 15000,
-    },
-  )
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      },
+    )
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      throw new Error(
+        'GitHub authorization succeeded, but the internal token exchange endpoint returned HTTP 404: ' +
+        `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange. ` +
+        'This CLI repository does not implement that backend endpoint; deploy a backend that validates GitHub organization membership and issues the internal token before this login method can complete.',
+      )
+    }
+    throw error
+  }
 
   if (anthropicTokenResponse.status !== 200) {
     throw new Error(
