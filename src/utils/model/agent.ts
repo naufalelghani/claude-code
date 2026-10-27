@@ -125,7 +125,18 @@ export function getAgentModelDisplay(model: string | undefined): string {
   // When model is omitted, getDefaultSubagentModel() returns 'inherit' at runtime
   if (!model) return 'Inherit from parent (default)'
   if (model === 'inherit') return 'Inherit from parent'
-  return capitalize(model)
+  switch (model) {
+    case 'fable':
+      return 'Fable 5.1'
+    case 'opus':
+      return 'Opus 5.5'
+    case 'sonnet':
+      return 'Sonnet 5.5'
+    case 'haiku':
+      return 'Haiku 5.5'
+    default:
+      return capitalize(model)
+  }
 }
 
 /**
@@ -134,19 +145,24 @@ export function getAgentModelDisplay(model: string | undefined): string {
 export function getAgentModelOptions(): AgentModelOption[] {
   return [
     {
-      value: 'sonnet',
-      label: 'Sonnet',
-      description: 'Balanced performance - best for most agents',
+      value: 'fable',
+      label: 'Fable 5.1',
+      description: 'For demanding reasoning and long-horizon agentic work',
     },
     {
       value: 'opus',
-      label: 'Opus',
-      description: 'Most capable for complex reasoning tasks',
+      label: 'Opus 5.5',
+      description: 'For long-running agentic coding and knowledge work',
+    },
+    {
+      value: 'sonnet',
+      label: 'Sonnet 5.5',
+      description: 'Best combination of speed and intelligence',
     },
     {
       value: 'haiku',
-      label: 'Haiku',
-      description: 'Fast and efficient for simple tasks',
+      label: 'Haiku 5.5',
+      description: 'Fastest for high-volume, latency-sensitive tasks',
     },
     {
       value: 'inherit',

@@ -31,6 +31,48 @@ type DeprecationEntry = {
  * To add a new deprecated model, add an entry to this object.
  */
 const DEPRECATED_MODELS: Record<string, DeprecationEntry> = {
+  // Current Anthropic API schedule: Sonnet 4.5 is deprecated and retires
+  // on November 30, 2026. Other provider dates are left unknown until confirmed.
+  'claude-sonnet-4-5': {
+    modelName: 'Claude Sonnet 4.5',
+    retirementDates: {
+      firstParty: 'November 30, 2026',
+      bedrock: null,
+      vertex: null,
+      foundry: null,
+      openai: null,
+    },
+  },
+  'claude-opus-4-1': {
+    modelName: 'Claude Opus 4.1',
+    retirementDates: {
+      firstParty: 'August 5, 2026',
+      bedrock: null,
+      vertex: null,
+      foundry: null,
+      openai: null,
+    },
+  },
+  'claude-opus-4-20250514': {
+    modelName: 'Claude Opus 4',
+    retirementDates: {
+      firstParty: 'June 15, 2026',
+      bedrock: null,
+      vertex: null,
+      foundry: null,
+      openai: null,
+    },
+  },
+  'claude-sonnet-4-20250514': {
+    modelName: 'Claude Sonnet 4',
+    retirementDates: {
+      firstParty: 'June 15, 2026',
+      bedrock: null,
+      vertex: null,
+      foundry: null,
+      openai: null,
+    },
+  },
   'claude-3-opus': {
     modelName: 'Claude 3 Opus',
     retirementDates: {
@@ -38,6 +80,7 @@ const DEPRECATED_MODELS: Record<string, DeprecationEntry> = {
       bedrock: 'January 15, 2026',
       vertex: 'January 5, 2026',
       foundry: 'January 5, 2026',
+      openai: null,
     },
   },
   'claude-3-7-sonnet': {
@@ -47,6 +90,7 @@ const DEPRECATED_MODELS: Record<string, DeprecationEntry> = {
       bedrock: 'April 28, 2026',
       vertex: 'May 11, 2026',
       foundry: 'February 19, 2026',
+      openai: null,
     },
   },
   'claude-3-5-haiku': {
@@ -56,6 +100,17 @@ const DEPRECATED_MODELS: Record<string, DeprecationEntry> = {
       bedrock: null,
       vertex: null,
       foundry: null,
+      openai: null,
+    },
+  },
+  'claude-3-haiku': {
+    modelName: 'Claude 3 Haiku',
+    retirementDates: {
+      firstParty: 'April 20, 2026',
+      bedrock: null,
+      vertex: null,
+      foundry: null,
+      openai: null,
     },
   },
 }
@@ -97,5 +152,8 @@ export function getModelDeprecationWarning(
     return null
   }
 
-  return `⚠ ${info.modelName} will be retired on ${info.retirementDate}. Consider switching to a newer model.`
+  const retirementTime = new Date(info.retirementDate).getTime()
+  const retired = Number.isFinite(retirementTime) && Date.now() >= retirementTime
+  const statusText = retired ? 'was retired' : 'is scheduled to retire'
+  return `⚠ ${info.modelName} ${statusText} on ${info.retirementDate}. Switch to one of the current Claude models: Fable 5.1, Opus 5.5, Sonnet 5.5, or Haiku 5.5.`
 }

@@ -85,9 +85,10 @@ Use Anthropic's first-party API directly.
 
 | Model | ID |
 |---|---|
-| Claude Opus 4.6 | `claude-opus-4-6` |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` |
-| Claude Haiku 4.5 | `claude-haiku-4-5` |
+| Claude Fable 5.1 | `claude-fable-5-1` |
+| Claude Opus 5.5 | `claude-opus-5-5` |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` |
+| Claude Haiku 5.5 | `claude-haiku-5-5` |
 
 ### OpenAI Codex
 
@@ -114,7 +115,7 @@ export AWS_REGION="us-east-1"   # or AWS_DEFAULT_REGION
 free-code
 ```
 
-Uses your standard AWS credentials (environment variables, `~/.aws/config`, or IAM role). Models are mapped to Bedrock ARN format automatically (e.g., `us.anthropic.claude-opus-4-6-v1`).
+Uses your standard AWS credentials (environment variables, `~/.aws/config`, or IAM role). Models are mapped to Bedrock inference-profile IDs automatically (e.g., `us.anthropic.claude-opus-5-5`).
 
 | Variable | Purpose |
 |---|---|
@@ -133,7 +134,7 @@ export CLAUDE_CODE_USE_VERTEX=1
 free-code
 ```
 
-Uses Google Cloud Application Default Credentials (`gcloud auth application-default login`). Models are mapped to Vertex format automatically (e.g., `claude-opus-4-6@latest`).
+Uses Google Cloud Application Default Credentials (`gcloud auth application-default login`). Models are mapped to Vertex format automatically (e.g., `claude-opus-5-5@latest`).
 
 ### Anthropic Foundry
 
@@ -214,10 +215,13 @@ bun run ./scripts/build.ts --dev --feature=BRIDGE_MODE
 ./cli -p "what files are in this directory?"
 
 # Specify a model
-./cli --model claude-opus-4-6
+./cli --model opus
 
 # Run from source (slower startup)
 bun run dev
+
+# Run tests (uses Bun's built-in test runner)
+npm test
 
 # OAuth login
 ./cli /login
@@ -231,6 +235,7 @@ bun run dev
 | `ANTHROPIC_AUTH_TOKEN` | Auth token (alternative) |
 | `ANTHROPIC_MODEL` | Override default model |
 | `ANTHROPIC_BASE_URL` | Custom API endpoint |
+| `ANTHROPIC_DEFAULT_FABLE_MODEL` | Custom Fable model ID |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | Custom Opus model ID |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Custom Sonnet model ID |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Custom Haiku model ID |

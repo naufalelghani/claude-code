@@ -2,6 +2,7 @@ import { c as _c } from "react/compiler-runtime";
 import * as React from 'react';
 import { Box, Text } from '../../ink.js';
 import { getAgentModelOptions } from '../../utils/model/agent.js';
+import { normalizeModelSettingForPicker } from '../../utils/model/model.js';
 import { Select } from '../CustomSelect/select.js';
 interface ModelSelectorProps {
   initialModel?: string;
@@ -15,27 +16,30 @@ export function ModelSelector(t0) {
     onComplete,
     onCancel
   } = t0;
+  const normalizedInitialModel = initialModel === undefined
+    ? undefined
+    : normalizeModelSettingForPicker(initialModel) ?? undefined;
   let t1;
-  if ($[0] !== initialModel) {
+  if ($[0] !== normalizedInitialModel) {
     bb0: {
       const base = getAgentModelOptions();
-      if (initialModel && !base.some(o => o.value === initialModel)) {
+      if (normalizedInitialModel && !base.some(o => o.value === normalizedInitialModel)) {
         t1 = [{
-          value: initialModel,
-          label: initialModel,
+          value: normalizedInitialModel,
+          label: normalizedInitialModel,
           description: "Current model (custom ID)"
         }, ...base];
         break bb0;
       }
       t1 = base;
     }
-    $[0] = initialModel;
+    $[0] = normalizedInitialModel;
     $[1] = t1;
   } else {
     t1 = $[1];
   }
   const modelOptions = t1;
-  const defaultModel = initialModel ?? "sonnet";
+  const defaultModel = normalizedInitialModel ?? "sonnet";
   let t2;
   if ($[2] === Symbol.for("react.memo_cache_sentinel")) {
     t2 = <Box marginBottom={1}><Text dimColor={true}>Model determines the agent's reasoning capabilities and speed.</Text></Box>;

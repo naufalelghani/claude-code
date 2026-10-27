@@ -15,7 +15,7 @@ import {
   isProSubscriber,
   isTeamPremiumSubscriber,
 } from '../auth.js'
-import { getAntModelOverrideConfig, resolveAntModel } from './antModels.js'
+import { resolveAntModel } from './antModels.js'
 import {
   has1mContext,
   is1mContextDisabled,
@@ -23,7 +23,11 @@ import {
 } from '../context.js'
 import { isEnvTruthy } from '../envUtils.js'
 import { getModelStrings, resolveOverriddenModel } from './modelStrings.js'
-import { formatModelPricing, getOpus46CostTier } from '../modelCost.js'
+import {
+  COST_OPUS_55_FAST,
+  formatModelPricing,
+  getOpus46CostTier,
+} from '../modelCost.js'
 import { getSettings_DEPRECATED } from '../settings/settings.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { getAPIProvider } from './providers.js'
@@ -31,6 +35,7 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { ALL_MODEL_CONFIGS } from './configs.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
+import { normalizeClaudeModelFamily } from './currentClaudeModels.js'
 import { capitalize } from '../stringUtils.js'
 
 export type ModelShortName = string
@@ -43,25 +48,30 @@ export function getSmallFastModel(): ModelName {
 
 export function isNonCustomOpusModel(model: ModelName): boolean {
   return (
-    model === getModelStrings().opus40 ||
-    model === getModelStrings().opus41 ||
+    model === getModelStrings().opus55 ||
+    model === getModelStrings().opus5 ||
+    model === getModelStrings().opus48 ||
+    model === getModelStrings().opus47 ||
+    model === getModelStrings().opus46 ||
     model === getModelStrings().opus45 ||
-    model === getModelStrings().opus46
+    model === getModelStrings().opus41 ||
+    model === getModelStrings().opus40
   )
 }
 
 /**
- * Helper to get the model from /model (including via /config), the --model flag, environment variable,
- * or the saved settings. The returned value can be a model alias if that's what the user specified.
- * Undefined if the user didn't configure anything, in which case we fall back to
- * the default (null).
- *
- * Priority order within this function:
- * 1. Model override during session (from /model command) - highest priority
- * 2. Model override at startup (from --model flag)
- * 3. ANTHROPIC_MODEL environment variable
- * 4. Settings (from user's saved settings)
+ * Normalize saved Claude selections to the four supported model families.
+ * Non-Claude custom deployment IDs are preserved as supplied.
  */
+export function normalizeModelSettingForPicker(
+  setting: string | null,
+): string | null {
+  if (setting === null) return null
+
+  const trimmed = setting.trim()
+  return normalizeClaudeModelFamily(trimmed) ?? trimmed
+}
+
 export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
   let specifiedModel: ModelSetting | undefined
 
@@ -73,9 +83,17 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
   }
 
-  // Ignore the user-specified model if it's not in the availableModels allowlist.
+  // Check the existing value first so a saved allowlist cannot be bypassed by
+  // rewriting an old model ID to its current family alias.
   if (specifiedModel && !isModelAllowed(specifiedModel)) {
     return undefined
+  }
+
+  if (specifiedModel) {
+    specifiedModel = normalizeModelSettingForPicker(specifiedModel) as ModelSetting
+    if (!isModelAllowed(specifiedModel)) {
+      return undefined
+    }
   }
 
   return specifiedModel
@@ -188,22 +206,19 @@ export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
     return getModelStrings().gpt53codex
   }
 
-  // Ants default to defaultModel from flag config, or Opus 1M if not configured
+  // Keep the default on the current Opus model for Ant builds as well.
   if (process.env.USER_TYPE === 'ant') {
-    return (
-      getAntModelOverrideConfig()?.defaultModel ??
-      getDefaultOpusModel() + '[1m]'
-    )
+    return getDefaultOpusModel()
   }
 
-  // Max users get Opus as default
+  // Max users get the current Opus model (1M context is part of the model).
   if (isMaxSubscriber()) {
-    return getDefaultOpusModel() + (isOpus1mMergeEnabled() ? '[1m]' : '')
+    return getDefaultOpusModel()
   }
 
-  // Team Premium gets Opus (same as Max)
+  // Team Premium gets Opus (same as Max).
   if (isTeamPremiumSubscriber()) {
-    return getDefaultOpusModel() + (isOpus1mMergeEnabled() ? '[1m]' : '')
+    return getDefaultOpusModel()
   }
 
   // PAYG (1P and 3P), Enterprise, Team Standard, and Pro get Sonnet as default
@@ -358,6 +373,19 @@ export function getSystemPromptModel(modelInput: ModelName): ModelName {
     .replace(/\[1m\]$/i, '')
     .trim()
 
+  const currentFamily = normalizeModelSettingForPicker(modelInput)
+  switch (currentFamily) {
+    case 'fable':
+      return getCanonicalName(getDefaultFableModel())
+    case 'opus':
+      return getCanonicalName(getDefaultOpusModel())
+    case 'sonnet':
+      return getCanonicalName(getDefaultSonnetModel())
+    case 'haiku':
+      return getCanonicalName(getDefaultHaikuModel())
+  }
+
+  // Keep the access restriction as a fallback for unknown Mythos codename forms.
   if (
     isRestrictedMythosModel(normalized) &&
     !isInternalSubscriber() &&
@@ -372,22 +400,7 @@ export function getSystemPromptModel(modelInput: ModelName): ModelName {
     return getCanonicalName(modelConfig.firstParty)
   }
 
-  switch (normalized) {
-    case 'opusplan':
-    case 'sonnet':
-      return getCanonicalName(getDefaultSonnetModel())
-    case 'haiku':
-      return getCanonicalName(getDefaultHaikuModel())
-    case 'opus':
-    case 'best':
-      return getCanonicalName(getDefaultOpusModel())
-    case 'fable':
-      return getCanonicalName(getDefaultFableModel())
-    case 'mythos':
-      return getCanonicalName(getDefaultMythosModel())
-    default:
-      return getCanonicalName(modelInput)
-  }
+  return getCanonicalName(modelInput)
 }
 
 // @[MODEL LAUNCH]: Update the default model description strings shown to users.
@@ -398,10 +411,11 @@ export function getClaudeAiUserDefaultModelDescription(
     return 'GPT-5.3 Codex · Optimized for code generation and understanding'
   }
   if (isMaxSubscriber() || isTeamPremiumSubscriber()) {
-    if (isOpus1mMergeEnabled()) {
-      return `Opus 5.5 with 1M context · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
-    }
-    return `Opus 5.5 · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
+    const fastPricing =
+      fastMode && getAPIProvider() === 'firstParty'
+        ? ` · ${formatModelPricing(COST_OPUS_55_FAST)}`
+        : ''
+    return `Opus 5.5 · Most capable for complex work${fastPricing}`
   }
   return 'Sonnet 5.5 · Best for everyday tasks'
 }
@@ -410,7 +424,7 @@ export function renderDefaultModelSetting(
   setting: ModelName | ModelAlias,
 ): string {
   if (setting === 'opusplan') {
-    return 'Opus 5.5 in plan mode, else Sonnet 5.5'
+    return 'Opus 5.5'
   }
   return renderModelName(parseUserSpecifiedModel(setting))
 }
@@ -444,7 +458,7 @@ export function isOpus1mMergeEnabled(): boolean {
 
 export function renderModelSetting(setting: ModelName | ModelAlias): string {
   if (setting === 'opusplan') {
-    return 'Opus Plan'
+    return 'Opus 5.5'
   }
   if (isModelAlias(setting)) {
     return capitalize(setting)
@@ -469,6 +483,14 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
   }
 
   switch (model) {
+    case getModelStrings().fable51:
+      return 'Fable 5.1'
+    case getModelStrings().opus55:
+      return 'Opus 5.5'
+    case getModelStrings().sonnet55:
+      return 'Sonnet 5.5'
+    case getModelStrings().haiku55:
+      return 'Haiku 5.5'
     case getModelStrings().opus46:
       return 'Opus 4.6'
     case getModelStrings().opus46 + '[1m]':
@@ -604,29 +626,31 @@ export function parseUserSpecifiedModel(
     ? normalizedModel.replace(/\[1m]$/i, '').trim()
     : normalizedModel
 
+  // Treat existing full model IDs and legacy aliases as a selection of one
+  // of the four current families. The selected family alias resolves to the
+  // provider-specific current model ID below.
+  const normalizedSetting = normalizeModelSettingForPicker(modelInputTrimmed)
+  if (
+    normalizedSetting !== null &&
+    normalizedSetting !== modelString &&
+    (normalizedSetting === 'fable' ||
+      normalizedSetting === 'opus' ||
+      normalizedSetting === 'sonnet' ||
+      normalizedSetting === 'haiku')
+  ) {
+    return parseUserSpecifiedModel(normalizedSetting as ModelAlias)
+  }
+
   if (isModelAlias(modelString)) {
     switch (modelString) {
-      case 'opusplan':
-        return routeInternalModel(
-          getDefaultSonnetModel(),
-          has1mTag,
-        ) // Sonnet is default, Opus in plan mode
+      case 'fable':
+        return routeInternalModel(getDefaultFableModel(), has1mTag)
+      case 'opus':
+        return routeInternalModel(getDefaultOpusModel(), has1mTag)
       case 'sonnet':
         return routeInternalModel(getDefaultSonnetModel(), has1mTag)
       case 'haiku':
         return routeInternalModel(getDefaultHaikuModel(), has1mTag)
-      case 'opus':
-        return routeInternalModel(getDefaultOpusModel(), has1mTag)
-      case 'best':
-        return routeInternalModel(getBestModel(), has1mTag)
-      case 'fable':
-        return routeInternalModel(getDefaultFableModel(), has1mTag)
-      case 'mythos':
-        if (!isInternalSubscriber() && process.env.USER_TYPE !== 'ant') {
-          return getDefaultFableModel() + (has1mTag ? '[1m]' : '')
-        }
-        return routeInternalModel(getDefaultMythosModel(), has1mTag)
-      default:
     }
   }
 
@@ -685,10 +709,9 @@ export function parseUserSpecifiedModel(
  * context window from 1M to 200K, which trips autocompact at 23% apparent usage
  * and surfaces "Context limit reached" even though nothing overflowed.
  *
- * We only carry [1m] when the target actually supports it (sonnet/opus). A skill
- * with `model: haiku` on a 1M session still downgrades — haiku has no 1M variant,
- * so the autocompact that follows is correct. Skills that already specify [1m]
- * are left untouched.
+ * We only carry [1m] when the target supports a 1M context window. All four
+ * current model families support 1M context, while older models are gated by
+ * their capability support. Skills that already specify [1m] are left untouched.
  */
 export function resolveSkillModelOverride(
   skillModel: string,
