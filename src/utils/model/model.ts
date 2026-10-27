@@ -90,15 +90,19 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
   }
 
-  // Check the existing value first so a saved allowlist cannot be bypassed by
-  // rewriting an old model ID to its current family alias.
-  if (specifiedModel && !isModelAllowed(specifiedModel)) {
+  const codexActive = isCodexSubscriber()
+
+  // availableModels is the Claude model allowlist; it must not block the
+  // separately authenticated Codex catalog or reject a selected Codex model.
+  // For Claude sessions, check before normalization so aliases cannot bypass
+  // a deliberately narrowed family allowlist.
+  if (specifiedModel && !codexActive && !isModelAllowed(specifiedModel)) {
     return undefined
   }
 
   if (specifiedModel) {
     specifiedModel = normalizeModelSettingForPicker(specifiedModel) as ModelSetting
-    if (!isModelAllowed(specifiedModel)) {
+    if (!codexActive && !isModelAllowed(specifiedModel)) {
       return undefined
     }
   }
