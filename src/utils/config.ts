@@ -238,6 +238,8 @@ export type GlobalConfig = {
     refreshToken: string
     expiresAt: number
     accountId: string
+    /** Whether Codex is the selected provider for this CLI install. */
+    active?: boolean
   }
   iterm2KeyBindingInstalled?: boolean // Legacy - keeping for backward compatibility
   editorMode?: EditorMode
