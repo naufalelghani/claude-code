@@ -29,8 +29,15 @@ export function modelSupportsEffort(model: string): boolean {
   if (supported3P !== undefined) {
     return supported3P
   }
-  // Supported by a subset of Claude 4 models
-  if (m.includes('opus-4-6') || m.includes('sonnet-4-6')) {
+  // The four current Claude models support the effort parameter.
+  if (
+    m.includes('claude-fable-5-1') ||
+    m.includes('claude-opus-5-5') ||
+    m.includes('claude-sonnet-5-5') ||
+    m.includes('claude-haiku-5-5') ||
+    m.includes('opus-4-6') ||
+    m.includes('sonnet-4-6')
+  ) {
     return true
   }
   // Exclude any other known legacy models (haiku, older opus/sonnet variants)
@@ -49,13 +56,19 @@ export function modelSupportsEffort(model: string): boolean {
 }
 
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports 'max' effort.
-// Per API docs, 'max' is Opus 4.6 only for public models — other models return an error.
 export function modelSupportsMaxEffort(model: string): boolean {
   const supported3P = get3PModelCapabilityOverride(model, 'max_effort')
   if (supported3P !== undefined) {
     return supported3P
   }
-  if (model.toLowerCase().includes('opus-4-6')) {
+  const m = model.toLowerCase()
+  if (
+    m.includes('claude-fable-5-1') ||
+    m.includes('claude-opus-5-5') ||
+    m.includes('claude-sonnet-5-5') ||
+    m.includes('claude-haiku-5-5') ||
+    m.includes('opus-4-6')
+  ) {
     return true
   }
   if (process.env.USER_TYPE === 'ant' && resolveAntModel(model)) {
@@ -298,6 +311,15 @@ export function getDefaultEffortForModel(
     }
     // Always default ants to undefined/high
     return undefined
+  }
+
+  // The latest Claude models have model-specific defaults documented by Anthropic.
+  const lowerModel = model.toLowerCase()
+  if (lowerModel.includes('claude-opus-5-5') || lowerModel.includes('claude-haiku-5-5')) {
+    return 'medium'
+  }
+  if (lowerModel.includes('claude-fable-5-1') || lowerModel.includes('claude-sonnet-5-5')) {
+    return 'high'
   }
 
   // IMPORTANT: Do not change the default effort level without notifying
