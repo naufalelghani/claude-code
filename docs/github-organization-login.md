@@ -37,6 +37,10 @@ Do not commit real credentials. A shared Client Secret cannot be kept secret in 
 
 A spoofed `installation_id` or an installation URL by itself is not proof of a valid installation. The CLI checks the installations available to the authenticated GitHub App user token via GitHub's `GET /user/installations` endpoint, then independently checks membership via `GET /user/memberships/orgs/{org}`.
 
+## Server-side authorization requirement
+
+The checks in this CLI prevent normal users from completing a login when installation or membership is missing, but a client-side check is not a security boundary: a modified CLI can skip it. Before this flow is used in production, the server behind `/api/oauth/github/exchange` must independently verify the GitHub identity, required App installation, and active organization membership before issuing an internal access token. That backend endpoint is not implemented in this repository, so its enforcement must be confirmed separately.
+
 ## Troubleshooting
 
 - **GitHub Organization login is not configured**: verify the three runtime variables above.
