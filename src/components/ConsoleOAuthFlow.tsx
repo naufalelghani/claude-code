@@ -14,7 +14,7 @@ import { OAuthService } from '../services/oauth/index.js';
 import { buildGitHubAuthUrl, githubOAuthExchangeCode } from '../services/oauth/github-client.js';
 import crypto from 'crypto';
 import { startGitHubOAuthFlow } from '../services/oauth/github-flow.js';
-import { getOauthAccountInfo, saveCodexOAuthTokens, validateForceLoginOrg } from '../utils/auth.js';
+import { getOauthAccountInfo, saveCodexOAuthTokens, setCodexOAuthActive, validateForceLoginOrg } from '../utils/auth.js';
 import { logError } from '../utils/log.js';
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js';
 import { Select } from './CustomSelect/select.js';
@@ -242,6 +242,9 @@ export function ConsoleOAuthFlow({
         if (!orgResult.valid) {
           throw new Error('message' in orgResult ? (orgResult as any).message : 'Invalid organization');
         }
+        // A successful non-Codex login explicitly switches away from any
+        // previously saved Codex provider preference without deleting its tokens.
+        setCodexOAuthActive(false);
         setOAuthStatus({
           state: 'success'
         });
