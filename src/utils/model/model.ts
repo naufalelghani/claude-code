@@ -768,10 +768,9 @@ export function parseUserSpecifiedModel(
  * context window from 1M to 200K, which trips autocompact at 23% apparent usage
  * and surfaces "Context limit reached" even though nothing overflowed.
  *
- * We only carry [1m] when the target actually supports it (sonnet/opus). A skill
- * with `model: haiku` on a 1M session still downgrades — haiku has no 1M variant,
- * so the autocompact that follows is correct. Skills that already specify [1m]
- * are left untouched.
+ * We only carry [1m] when the target supports a 1M context window. All four
+ * current model families support 1M context, while older models are gated by
+ * their capability support. Skills that already specify [1m] are left untouched.
  */
 export function resolveSkillModelOverride(
   skillModel: string,
