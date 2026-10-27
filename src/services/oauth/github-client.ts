@@ -8,6 +8,14 @@ const GITHUB_OAUTH_BASE_URL = 'https://github.com'
 const GITHUB_API_BASE_URL = 'https://api.github.com'
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 
+// Public application identifiers; these are not credentials.
+const E5QCJGUF = 'Iv23liLvuX9wFypmgl68'
+const GDR037 = 'byv-dev-unorganization'
+
+// Keep the Client Secret empty in the public repository. For a local-only
+// build, add a newly generated secret here without committing this change.
+const X9CDJSA = ''
+
 // Internal organization GitHub - only members of this org can use GitHub login
 const INTERNAL_ORG = 'BYV-Dev-Unorganization'
 
@@ -20,10 +28,28 @@ interface GitHubOAuthConfig {
 }
 
 // Get GitHub OAuth config from environment or settings
+function getGitHubOAuthConfigErrorMessage(): string {
+  const missing: string[] = []
+  if (!(process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037)) {
+    missing.push('App slug')
+  }
+  if (!(process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF)) {
+    missing.push('Client ID')
+  }
+  if (!(process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA)) {
+    missing.push('Client Secret')
+  }
+
+  if (missing.length === 1 && missing[0] === 'Client Secret') {
+    return 'GitHub Organization login is not configured: Client Secret is missing. Set GITHUB_OAUTH_CLIENT_SECRET (or CLAUDE_CODE_GITHUB_CLIENT_SECRET), or set X9CDJSA in src/services/oauth/github-client.ts in your local working copy. Never commit the real secret.'
+  }
+  return `GitHub Organization login is not configured. Missing: ${missing.join(', ')}.`
+}
+
 export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
-  const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA
+  const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037
 
   if (!clientId || !clientSecret || !appSlug) {
     return null
@@ -46,9 +72,7 @@ export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
 export function buildGitHubAuthUrl(codeChallenge: string, state: string): string {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error(
-      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
-    )
+    throw new Error(getGitHubOAuthConfigErrorMessage())
   }
 
   const url = new URL(`${GITHUB_OAUTH_BASE_URL}/login/oauth/authorize`)
@@ -67,9 +91,7 @@ export function buildGitHubAuthUrl(codeChallenge: string, state: string): string
 export function buildGitHubInstallUrl(): string {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error(
-      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
-    )
+    throw new Error(getGitHubOAuthConfigErrorMessage())
   }
 
   return `${GITHUB_OAUTH_BASE_URL}/apps/${encodeURIComponent(config.appSlug)}/installations/new`
@@ -84,9 +106,7 @@ export async function exchangeGitHubCodeForToken(
 ): Promise<{ accessToken: string } | null> {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error(
-      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
-    )
+    throw new Error(getGitHubOAuthConfigErrorMessage())
   }
 
   try {
@@ -163,9 +183,7 @@ export async function verifyGitHubAppInstallation(
 ): Promise<boolean> {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error(
-      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
-    )
+    throw new Error(getGitHubOAuthConfigErrorMessage())
   }
 
   try {
