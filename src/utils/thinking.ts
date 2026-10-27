@@ -101,6 +101,18 @@ export function modelSupportsThinking(model: string): boolean {
   // launch DRI and research. This can greatly affect model quality and bashing.
   const canonical = getCanonicalName(model)
   const provider = getAPIProvider()
+
+  // Anthropic documents thinking support for all four current models across
+  // first-party and partner platforms.
+  if (
+    canonical.includes('claude-fable-5-1') ||
+    canonical.includes('claude-opus-5-5') ||
+    canonical.includes('claude-sonnet-5-5') ||
+    canonical.includes('claude-haiku-5-5')
+  ) {
+    return true
+  }
+
   // 1P and Foundry: all Claude 4+ models (including Haiku 4.5)
   if (provider === 'foundry' || provider === 'firstParty') {
     return !canonical.includes('claude-3-')
@@ -116,8 +128,15 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
     return supported3P
   }
   const canonical = getCanonicalName(model)
-  // Supported by a subset of Claude 4 models
-  if (canonical.includes('opus-4-6') || canonical.includes('sonnet-4-6')) {
+  // All four current Claude models support adaptive thinking.
+  if (
+    canonical.includes('claude-fable-5-1') ||
+    canonical.includes('claude-opus-5-5') ||
+    canonical.includes('claude-sonnet-5-5') ||
+    canonical.includes('claude-haiku-5-5') ||
+    canonical.includes('opus-4-6') ||
+    canonical.includes('sonnet-4-6')
+  ) {
     return true
   }
   // Exclude any other known legacy models (allowlist above catches 4-6 variants first)
