@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
+  buildGitHubAuthUrl,
   buildGitHubInstallUrl,
   getGitHubOAuthConfig,
   hasRequiredGitHubAppInstallation,
@@ -28,16 +29,31 @@ afterEach(() => {
 })
 
 describe('GitHub App organization login configuration', () => {
-  test('builds the installation link with the configured app slug and state', () => {
+  test('builds an OAuth authorization link with PKCE and state', () => {
     process.env.GITHUB_APP_SLUG = 'byv-code'
     process.env.GITHUB_OAUTH_CLIENT_ID = 'test-client-id'
     process.env.GITHUB_OAUTH_CLIENT_SECRET = 'test-client-secret'
 
-    const url = new URL(buildGitHubInstallUrl('session_state_123'))
+    const url = new URL(buildGitHubAuthUrl('sha256-challenge', 'session_state_123'))
+
+    expect(url.origin).toBe('https://github.com')
+    expect(url.pathname).toBe('/login/oauth/authorize')
+    expect(url.searchParams.get('client_id')).toBe('test-client-id')
+    expect(url.searchParams.get('redirect_uri')).toBeTruthy()
+    expect(url.searchParams.get('state')).toBe('session_state_123')
+    expect(url.searchParams.get('code_challenge')).toBe('sha256-challenge')
+    expect(url.searchParams.get('code_challenge_method')).toBe('S256')
+  })
+
+  test('builds the organization App installation link', () => {
+    process.env.GITHUB_APP_SLUG = 'byv-code'
+    process.env.GITHUB_OAUTH_CLIENT_ID = 'test-client-id'
+    process.env.GITHUB_OAUTH_CLIENT_SECRET = 'test-client-secret'
+
+    const url = new URL(buildGitHubInstallUrl())
 
     expect(url.origin).toBe('https://github.com')
     expect(url.pathname).toBe('/apps/byv-code/installations/new')
-    expect(url.searchParams.get('state')).toBe('session_state_123')
   })
 
   test('supports the CLAUDE_CODE_GITHUB_* environment aliases', () => {
@@ -49,7 +65,7 @@ describe('GitHub App organization login configuration', () => {
     process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET = 'test-client-secret'
 
     expect(getGitHubOAuthConfig()?.appSlug).toBe('byv-code')
-    expect(new URL(buildGitHubInstallUrl('state')).pathname).toBe(
+    expect(new URL(buildGitHubInstallUrl()).pathname).toBe(
       '/apps/byv-code/installations/new',
     )
   })
