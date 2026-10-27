@@ -99,8 +99,8 @@ export async function requestGitHubDeviceCode(): Promise<{
 }> {
   const response = await axios.post(
     `${GITHUB_OAUTH_BASE_URL}/login/device/code`,
-    { client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF },
-    { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 15000 },
+    new URLSearchParams({ client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF }),
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 },
   )
   if (response.data?.error) {
     if (response.data.error === 'device_flow_disabled') {
@@ -137,12 +137,12 @@ export async function pollGitHubDeviceCode(
     if (Date.now() >= deadline) break
     const response = await axios.post(
       GITHUB_TOKEN_URL,
-      {
+      new URLSearchParams({
         client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF,
         device_code: deviceCode,
         grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      },
-      { headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, timeout: 15000 },
+      }),
+      { headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 },
     )
     if (response.data?.access_token) return response.data.access_token
     const error = response.data?.error
