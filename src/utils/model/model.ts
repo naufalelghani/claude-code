@@ -36,6 +36,7 @@ import { ALL_MODEL_CONFIGS } from './configs.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { normalizeClaudeModelFamily } from './currentClaudeModels.js'
+import { normalizeCodexModelSelection } from '../../services/api/codex-models.js'
 import { capitalize } from '../stringUtils.js'
 
 export type ModelShortName = string
@@ -69,6 +70,12 @@ export function normalizeModelSettingForPicker(
   if (setting === null) return null
 
   const trimmed = setting.trim()
+  // When Codex is active, migrate saved Codex/Claude picker values to a model
+  // actually present in the Codex catalog instead of rendering a stale custom entry.
+  if (isCodexSubscriber()) {
+    const codexSelection = normalizeCodexModelSelection(trimmed)
+    if (codexSelection) return codexSelection
+  }
   return normalizeClaudeModelFamily(trimmed) ?? trimmed
 }
 
