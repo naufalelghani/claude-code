@@ -38,14 +38,12 @@ export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
 }
 
 /**
- * Build the GitHub App installation URL used by the organization login flow.
- *
- * The GitHub App must be configured to request user authorization during
- * installation and use getOauthConfig().MANUAL_REDIRECT_URL as its callback.
- * GitHub will then return an authorization code that the CLI can exchange for
- * a user access token and use to verify both installation and membership.
+ * Start a normal GitHub App user-authorization flow for each CLI user.
+ * This is necessary because an organization installation is shared and
+ * organization members other than the installer must authorize the App
+ * independently.
  */
-export function buildGitHubInstallUrl(state: string): string {
+export function buildGitHubAuthUrl(codeChallenge: string, state: string): string {
   const config = getGitHubOAuthConfig()
   if (!config) {
     throw new Error(
@@ -53,9 +51,28 @@ export function buildGitHubInstallUrl(state: string): string {
     )
   }
 
-  const url = new URL(`${GITHUB_OAUTH_BASE_URL}/apps/${encodeURIComponent(config.appSlug)}/installations/new`)
+  const url = new URL(`${GITHUB_OAUTH_BASE_URL}/login/oauth/authorize`)
+  url.searchParams.set('client_id', config.clientId)
+  url.searchParams.set('redirect_uri', config.redirectUri)
   url.searchParams.set('state', state)
+  url.searchParams.set('code_challenge', codeChallenge)
+  url.searchParams.set('code_challenge_method', 'S256')
   return url.toString()
+}
+
+/**
+ * Build the one-time installation link shown when the required organization
+ * has not installed the App yet. Organization owners may need to approve it.
+ */
+export function buildGitHubInstallUrl(): string {
+  const config = getGitHubOAuthConfig()
+  if (!config) {
+    throw new Error(
+      'GitHub Organization login is not configured. Set GITHUB_APP_SLUG, GITHUB_OAUTH_CLIENT_ID, and GITHUB_OAUTH_CLIENT_SECRET.',
+    )
+  }
+
+  return `${GITHUB_OAUTH_BASE_URL}/apps/${encodeURIComponent(config.appSlug)}/installations/new`
 }
 
 /**
@@ -63,6 +80,7 @@ export function buildGitHubInstallUrl(state: string): string {
  */
 export async function exchangeGitHubCodeForToken(
   authorizationCode: string,
+  codeVerifier: string,
 ): Promise<{ accessToken: string } | null> {
   const config = getGitHubOAuthConfig()
   if (!config) {
@@ -79,6 +97,7 @@ export async function exchangeGitHubCodeForToken(
         client_secret: config.clientSecret,
         redirect_uri: config.redirectUri,
         code: authorizationCode,
+        code_verifier: codeVerifier,
       },
       {
         headers: {
@@ -279,6 +298,7 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
  */
 export async function githubOAuthFlow(
   authorizationCode: string,
+  codeVerifier: string,
 ): Promise<{
   accessToken: string
   user: {
@@ -292,6 +312,7 @@ export async function githubOAuthFlow(
   // Exchange code for GitHub token
   const tokenResponse = await exchangeGitHubCodeForToken(
     authorizationCode,
+    codeVerifier,
   )
 
   if (!tokenResponse) {
@@ -302,8 +323,9 @@ export async function githubOAuthFlow(
   // check can substitute for the other.
   const isAppInstalled = await verifyGitHubAppInstallation(tokenResponse.accessToken)
   if (!isAppInstalled) {
+    const installUrl = buildGitHubInstallUrl()
     throw new Error(
-      `The GitHub App must be installed on the ${INTERNAL_ORG} organization before you can log in.`,
+      `The GitHub App is not installed on ${INTERNAL_ORG}. Ask an organization owner to install or approve it, then restart login.\nInstall link: ${installUrl}`,
     )
   }
 
@@ -354,6 +376,7 @@ export async function githubOAuthFlow(
  */
 export async function githubOAuthExchangeCode(
   authorizationCode: string,
+  codeVerifier: string,
 ): Promise<{
   accessToken: string
   user: {
@@ -364,5 +387,5 @@ export async function githubOAuthExchangeCode(
   } | null
   subscriptionType: 'internal'
 } | null> {
-  return githubOAuthFlow(authorizationCode)
+  return githubOAuthFlow(authorizationCode, codeVerifier)
 }
