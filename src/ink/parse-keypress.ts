@@ -210,6 +210,15 @@ function inputToString(input: Buffer | string): string {
   }
 }
 
+function isIncompleteTerminalStringControl(sequence: string): boolean {
+  // DCS, OSC, and APC payloads may contain printable text, so discard them if a flush finds no terminator.
+  return (
+    sequence.startsWith('\x1bP') ||
+    sequence.startsWith('\x1b]') ||
+    sequence.startsWith('\x1b_')
+  )
+}
+
 export function parseMultipleKeypresses(
   prevState: KeyParseState,
   input: Buffer | string | null = '',
@@ -219,6 +228,9 @@ export function parseMultipleKeypresses(
 
   // Get or create tokenizer
   const tokenizer = prevState._tokenizer ?? createTokenizer({ x10Mouse: true })
+
+  // Preserve the buffered sequence so incomplete terminal replies can be discarded on flush.
+  const bufferedSequence = isFlush ? tokenizer.buffer() : ''
 
   // Tokenize the input
   const tokens = isFlush ? tokenizer.flush() : tokenizer.feed(inputString)
@@ -230,6 +242,15 @@ export function parseMultipleKeypresses(
 
   for (const token of tokens) {
     if (token.type === 'sequence') {
+      // Incomplete string-control replies can contain printable payload, not keystrokes.
+      if (
+        isFlush &&
+        token.value === bufferedSequence &&
+        isIncompleteTerminalStringControl(token.value)
+      ) {
+        continue
+      }
+
       if (token.value === PASTE_START) {
         inPaste = true
         pasteBuffer = ''
