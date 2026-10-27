@@ -3,52 +3,68 @@
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js'
 import { installOAuthTokens } from '../../cli/handlers/auth.js'
 import { type OAuthStatus } from '../../components/ConsoleOAuthFlow.js'
-import { buildGitHubAuthUrl, githubOAuthExchangeCode } from './github-client.js'
+import { githubOAuthExchangeCode, githubOAuthFlowWithAccessToken, pollGitHubDeviceCode, requestGitHubDeviceCode } from './github-client.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
 
 /**
- * Start the GitHub OAuth flow for internal team members.
- * This function handles:
- * 1. Building a GitHub App user-authorization URL with PKCE and a one-time state
- * 2. Opening the browser for user authorization
- * 3. Handling the callback (manual code entry)
- * 4. Verifying App installation and active organization membership
- * 5. Exchanging the GitHub token for an internal OAuth token
- *
- * @param onStatusUpdate Callback to update OAuthStatus during the flow
- * @param state The state parameter for this login attempt (CSRF protection)
- * @param codeChallenge The SHA-256 PKCE challenge for this login attempt
+ * Start GitHub Device Flow for CLI login. Device Flow does not require a
+ * Client Secret, so a source checkout can work without embedding credentials.
  */
 export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
-  state: string,
-  codeChallenge: string,
+  onLoginSuccess: () => void,
 ): Promise<void> {
   try {
     logEvent('tengu_oauth_github_flow_start', {})
+    const device = await requestGitHubDeviceCode()
 
-    const authUrl = buildGitHubAuthUrl(codeChallenge, state)
-
-    // Auto-open the GitHub App authorization page when a local browser is available.
     try {
-      await openBrowser(authUrl)
+      await openBrowser(device.verificationUri)
     } catch (e) {
-      logForDebugging('GitHub OAuth: Failed to open browser automatically', {
+      logForDebugging('GitHub Device Flow: Failed to open browser automatically', {
         error: (e as Error)?.message ?? 'unknown',
       })
     }
 
     onStatusUpdate({
       state: 'waiting_for_login',
-      url: authUrl,
+      url: device.verificationUri,
+      userCode: device.userCode,
+      deviceFlow: true,
     })
 
-    // The authenticated user may then install or request the App installation
-    // if it is missing. The code/state pair is validated before token exchange.
+    const githubAccessToken = await pollGitHubDeviceCode(
+      device.deviceCode,
+      device.interval,
+      device.expiresIn,
+    )
+    onStatusUpdate({ state: 'creating_api_key' })
+
+    const result = await githubOAuthFlowWithAccessToken(githubAccessToken)
+    if (!result) throw new Error('Failed to exchange GitHub device authorization for an internal token')
+
+    await installOAuthTokens({
+      accessToken: result.accessToken,
+      refreshToken: '',
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+      scopes: ['user:inference', 'user:profile', 'user:sessions:claude_code', 'user:mcp_servers', 'user:file_upload'],
+      subscriptionType: 'internal',
+      rateLimitTier: null,
+      profile: undefined,
+      tokenAccount: result.user ? {
+        uuid: '',
+        emailAddress: result.user.email,
+        organizationUuid: '',
+      } : undefined,
+    })
+
+    logEvent('tengu_oauth_github_success', { loginMethod: 'github' })
+    onStatusUpdate({ state: 'success', token: result.accessToken })
+    onLoginSuccess()
   } catch (error) {
-    logError(error as Error, 'GitHub OAuth flow failed')
+    logError(error as Error, 'GitHub Device Flow failed')
     logEvent('tengu_oauth_github_error', {
       error: (error as Error).message as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
     })
