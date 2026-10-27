@@ -420,7 +420,9 @@ export function ConsoleOAuthFlow({
       {oauthStatus.state === 'waiting_for_login' && (showPastePrompt || oauthStatus.deviceFlow) && <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
           <Box paddingX={1}>
             <Text dimColor>
-              Browser didn&apos;t open? Use the url below to sign in{' '}
+              {oauthStatus.deviceFlow
+                ? 'Open the GitHub device page and enter the code below.'
+                : 'Browser didn\'t open? Use the url below to sign in'}{' '}
             </Text>
             {urlCopied ? <Text color="success">(Copied!)</Text> : <Text dimColor>
                 <KeyboardShortcutHint shortcut="c" action="copy" parens />
