@@ -374,9 +374,9 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
 }
 
 /**
- * Verify GitHub OAuth token and exchange for internal CLAUDE_CODE_OAUTH_TOKEN
- * This function handles the full GitHub OAuth flow and returns an OAuth token
- * that can be used like any other Claude Code OAuth token
+ * Validate a GitHub identity for the local GitHub login session.
+ * The GitHub access token is not an Anthropic API token and must not be used
+ * for Anthropic inference requests.
  */
 export async function githubOAuthFlow(
   authorizationCode: string,
@@ -438,11 +438,11 @@ export async function githubOAuthFlowWithAccessToken(accessToken: string): Promi
     accessToken,
     user: userInfo,
     subscriptionType: 'github',
-  }}
+  }
+}
 
 /**
- * Exchange GitHub OAuth code and get Anthropic internal token
- * Public API for GitHub OAuth flow initiation
+ * Validate a GitHub OAuth code and return a GitHub identity session.
  */
 export async function githubOAuthExchangeCode(
   authorizationCode: string,
