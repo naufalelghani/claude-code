@@ -39,13 +39,20 @@ export function has1mContext(model: string): boolean {
   return /\[1m\]/i.test(model)
 }
 
-// @[MODEL LAUNCH]: Update this pattern if the new model supports 1M context
+// All four current Claude models have a 1M-token context window.
 export function modelSupports1M(model: string): boolean {
   if (is1mContextDisabled()) {
     return false
   }
   const canonical = getCanonicalName(model)
-  return canonical.includes('claude-sonnet-4') || canonical.includes('opus-4-6')
+  return (
+    canonical.includes('claude-fable-5-1') ||
+    canonical.includes('claude-opus-5-5') ||
+    canonical.includes('claude-sonnet-5-5') ||
+    canonical.includes('claude-haiku-5-5') ||
+    canonical.includes('claude-sonnet-4') ||
+    canonical.includes('opus-4-6')
+  )
 }
 
 export function getContextWindowForModel(
@@ -80,6 +87,18 @@ export function getContextWindowForModel(
       return MODEL_CONTEXT_WINDOW_DEFAULT
     }
     return cap.max_input_tokens
+  }
+
+  // The four current Claude models have 1M context by default. Older
+  // 1M-capable models still require the explicit beta header or opt-in.
+  const canonical = getCanonicalName(model)
+  const hasDefault1MContext =
+    canonical.includes('claude-fable-5-1') ||
+    canonical.includes('claude-opus-5-5') ||
+    canonical.includes('claude-sonnet-5-5') ||
+    canonical.includes('claude-haiku-5-5')
+  if (hasDefault1MContext && modelSupports1M(model)) {
+    return 1_000_000
   }
 
   if (betas?.includes(CONTEXT_1M_BETA_HEADER) && modelSupports1M(model)) {
@@ -164,7 +183,13 @@ export function getModelMaxOutputTokens(model: string): {
 
   const m = getCanonicalName(model)
 
-  if (m.includes('opus-4-6')) {
+  if (m.includes('claude-fable-5-1') || m.includes('claude-opus-5-5')) {
+    defaultTokens = 64_000
+    upperLimit = 128_000
+  } else if (m.includes('claude-sonnet-5-5') || m.includes('claude-haiku-5-5')) {
+    defaultTokens = 32_000
+    upperLimit = 128_000
+  } else if (m.includes('opus-4-6')) {
     defaultTokens = 64_000
     upperLimit = 128_000
   } else if (m.includes('sonnet-4-6')) {
