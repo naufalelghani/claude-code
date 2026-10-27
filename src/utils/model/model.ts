@@ -35,6 +35,7 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { ALL_MODEL_CONFIGS } from './configs.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
+import { normalizeClaudeModelFamily } from './currentClaudeModels.js'
 import { capitalize } from '../stringUtils.js'
 
 export type ModelShortName = string
@@ -59,21 +60,8 @@ export function isNonCustomOpusModel(model: ModelName): boolean {
 }
 
 /**
- * Helper to get the model from /model (including via /config), the --model flag, environment variable,
- * or the saved settings. The returned value can be a model alias if that's what the user specified.
- * Undefined if the user didn't configure anything, in which case we fall back to
- * the default (null).
- *
- * Priority order within this function:
- * 1. Model override during session (from /model command) - highest priority
- * 2. Model override at startup (from --model flag)
- * 3. ANTHROPIC_MODEL environment variable
- * 4. Settings (from user's saved settings)
- */
-/**
- * Normalize saved selections to one of the four supported Claude model families.
- * Older model IDs and legacy aliases resolve to their current family instead of
- * being re-added to the picker as extra choices.
+ * Normalize saved Claude selections to the four supported model families.
+ * Non-Claude custom deployment IDs are preserved as supplied.
  */
 export function normalizeModelSettingForPicker(
   setting: string | null,
@@ -81,41 +69,7 @@ export function normalizeModelSettingForPicker(
   if (setting === null) return null
 
   const trimmed = setting.trim()
-  const lower = trimmed.toLowerCase().replace(/\[1m\]$/i, '').trim()
-
-  if (/^(?:fable|fable5|fable51|mythos|mythos5|mythos51)$/.test(lower)) {
-    return 'fable'
-  }
-  if (
-    /^(?:opus|opus3|opus40|opus41|opus45|opus46|opus47|opus48|opus5|opus55|best|opusplan)$/.test(
-      lower,
-    )
-  ) {
-    return 'opus'
-  }
-  if (
-    /^(?:sonnet|sonnet35|sonnet37|sonnet40|sonnet45|sonnet46|sonnet5|sonnet55)$/.test(
-      lower,
-    )
-  ) {
-    return 'sonnet'
-  }
-  if (/^(?:haiku|haiku3|haiku35|haiku45|haiku55)$/.test(lower)) {
-    return 'haiku'
-  }
-
-  const canonical = getCanonicalName(lower).toLowerCase()
-  if (/^claude-(?:fable-|mythos-)/.test(canonical)) return 'fable'
-  if (/^claude-(?:opus-|3-opus)/.test(canonical)) return 'opus'
-  if (/^claude-(?:sonnet-|3-(?:5-|7-)?sonnet)/.test(canonical)) {
-    return 'sonnet'
-  }
-  if (/^claude-(?:haiku-|3-(?:5-)?haiku)/.test(canonical)) {
-    return 'haiku'
-  }
-
-  // Preserve non-Claude custom deployments and the separate Codex model path.
-  return trimmed
+  return normalizeClaudeModelFamily(trimmed) ?? trimmed
 }
 
 export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
