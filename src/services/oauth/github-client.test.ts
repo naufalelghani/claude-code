@@ -70,17 +70,19 @@ describe('GitHub App organization login configuration', () => {
     )
   })
 
-  test('uses built-in public App identifiers when the environment does not override them', () => {
+  test('uses built-in public App identifiers without requiring a Client Secret', () => {
     delete process.env.GITHUB_APP_SLUG
     delete process.env.CLAUDE_CODE_GITHUB_APP_SLUG
     delete process.env.GITHUB_OAUTH_CLIENT_ID
     delete process.env.CLAUDE_CODE_GITHUB_CLIENT_ID
-    process.env.GITHUB_OAUTH_CLIENT_SECRET = 'test-client-secret'
+    delete process.env.GITHUB_OAUTH_CLIENT_SECRET
+    delete process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
 
     const config = getGitHubOAuthConfig()
 
     expect(config?.clientId).toBe('Iv23liLvuX9wFypmgl68')
     expect(config?.appSlug).toBe('byv-dev-unorganization')
+    expect(config?.clientSecret).toBe('')
   })
 
   test('requires an installation for the exact App on the target organization', () => {
@@ -126,7 +128,7 @@ describe('GitHub App organization login configuration', () => {
     expect(isActiveGitHubOrgMembershipState(undefined)).toBe(false)
   })
 
-  test('fails with an actionable message when the App is not configured', () => {
+  test('can build the public App authorization URL without a Client Secret', () => {
     delete process.env.GITHUB_APP_SLUG
     delete process.env.CLAUDE_CODE_GITHUB_APP_SLUG
     delete process.env.GITHUB_OAUTH_CLIENT_ID
@@ -134,8 +136,7 @@ describe('GitHub App organization login configuration', () => {
     delete process.env.GITHUB_OAUTH_CLIENT_SECRET
     delete process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
 
-    expect(() => buildGitHubAuthUrl('challenge', 'state')).toThrow(
-      'Client Secret is missing',
-    )
+    const url = new URL(buildGitHubAuthUrl('challenge', 'state'))
+    expect(url.searchParams.get('client_id')).toBe('Iv23liLvuX9wFypmgl68')
   })
 })
