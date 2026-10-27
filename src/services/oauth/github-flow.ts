@@ -11,15 +11,14 @@ import { openBrowser } from '../../utils/browser.js'
 /**
  * Start the GitHub OAuth flow for internal team members.
  * This function handles:
- * 1. Building the GitHub auth URL with PKCE
- * 2. Opening the browser for authentication
+ * 1. Building the GitHub App installation URL with a one-time state
+ * 2. Opening the browser for installation and user authorization
  * 3. Handling the callback (manual code entry)
- * 4. Exchanging the GitHub token for an internal Anthropic OAuth token
- * 5. Installing the tokens
+ * 4. Verifying installation and active organization membership
+ * 5. Exchanging the GitHub token for an internal OAuth token
  *
  * @param onStatusUpdate Callback to update OAuthStatus during the flow
- * @param onDone Callback when login completes successfully
- * @param state The state parameter for OAuth flow (used for CSRF protection)
+ * @param state The state parameter for this login attempt (CSRF protection)
  */
 export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
@@ -30,7 +29,7 @@ export async function startGitHubOAuthFlow(
 
     const authUrl = buildGitHubInstallUrl(state)
 
-    // Auto-open browser for GitHub OAuth flow (same behavior as Claude.ai login)
+    // Auto-open the GitHub App installation page when a local browser is available.
     try {
       await openBrowser(authUrl)
     } catch (e) {
