@@ -31,7 +31,7 @@ import {
   saveOAuthTokensIfNeeded,
   validateForceLoginOrg,
 } from '../../utils/auth.js'
-import { saveGlobalConfig } from '../../utils/config.js'
+import { getGlobalConfig, saveGlobalConfig } from '../../utils/config.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { isRunningOnHomespace } from '../../utils/envUtils.js'
 import { errorMessage } from '../../utils/errors.js'
@@ -259,10 +259,12 @@ export async function authStatus(opts: {
   const hasApiKeyEnvVar =
     !!process.env.ANTHROPIC_API_KEY && !isRunningOnHomespace()
   const oauthAccount = getOauthAccountInfo()
+  const githubAccount = getGlobalConfig().githubOAuth
+  const hasGitHubSession = !!githubAccount?.accessToken
   const subscriptionType = getSubscriptionType()
   const using3P = isUsing3PServices()
   const loggedIn =
-    hasToken || apiKeySource !== 'none' || hasApiKeyEnvVar || using3P
+    hasToken || apiKeySource !== 'none' || hasApiKeyEnvVar || using3P || hasGitHubSession
 
   // Determine auth method
   let authMethod: string = 'none'
@@ -274,6 +276,8 @@ export async function authStatus(opts: {
     authMethod = 'api_key_helper'
   } else if (authTokenSource !== 'none') {
     authMethod = 'oauth_token'
+  } else if (hasGitHubSession) {
+    authMethod = 'github'
   } else if (apiKeySource === 'ANTHROPIC_API_KEY' || hasApiKeyEnvVar) {
     authMethod = 'api_key'
   } else if (apiKeySource === '/login managed key') {
@@ -302,6 +306,10 @@ export async function authStatus(opts: {
       } else {
         process.stdout.write(`${value}\n`)
       }
+    }
+    if (hasGitHubSession) {
+      process.stdout.write(`GitHub: ${githubAccount.login}\n`)
+      hasAuthProperty = true
     }
     if (!hasAuthProperty && hasApiKeyEnvVar) {
       process.stdout.write('API key: ANTHROPIC_API_KEY\n')
@@ -332,6 +340,9 @@ export async function authStatus(opts: {
       output.orgId = oauthAccount?.organizationUuid ?? null
       output.orgName = oauthAccount?.organizationName ?? null
       output.subscriptionType = subscriptionType ?? null
+    } else if (authMethod === 'github') {
+      output.githubLogin = githubAccount?.login ?? null
+      output.email = githubAccount?.email ?? null
     }
 
     process.stdout.write(jsonStringify(output, null, 2) + '\n')
