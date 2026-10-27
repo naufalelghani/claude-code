@@ -1329,8 +1329,26 @@ export function saveCodexOAuthTokens(tokens: CodexTokens): void {
       refreshToken: tokens.refreshToken,
       expiresAt: tokens.expiresAt,
       accountId: tokens.accountId,
+      active: true,
     },
   }))
+}
+
+/**
+ * Explicitly switches between stored Codex authentication and the other
+ * configured provider without discarding the saved Codex refresh token.
+ */
+export function setCodexOAuthActive(active: boolean): void {
+  saveGlobalConfig(cfg => {
+    if (!cfg.codexOAuth) return cfg
+    return {
+      ...cfg,
+      codexOAuth: {
+        ...cfg.codexOAuth,
+        active,
+      },
+    }
+  })
 }
 
 /**
