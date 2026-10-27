@@ -45,6 +45,13 @@ export function modelSupports1M(model: string): boolean {
     return false
   }
   const canonical = getCanonicalName(model)
+  if (
+    canonical.includes('gpt-6-luna') ||
+    canonical.includes('gpt-5.6-terra') ||
+    canonical.includes('gpt-5.6-luna')
+  ) {
+    return true
+  }
   return (
     canonical.includes('claude-fable-5-1') ||
     canonical.includes('claude-opus-5-5') ||
@@ -92,6 +99,13 @@ export function getContextWindowForModel(
   // The four current Claude models have 1M context by default. Older
   // 1M-capable models still require the explicit beta header or opt-in.
   const canonical = getCanonicalName(model)
+  const hasCodexLargeContext =
+    canonical.includes('gpt-6-luna') ||
+    canonical.includes('gpt-5.6-terra') ||
+    canonical.includes('gpt-5.6-luna')
+  if (hasCodexLargeContext) {
+    return is1mContextDisabled() ? MODEL_CONTEXT_WINDOW_DEFAULT : 1_050_000
+  }
   const hasDefault1MContext =
     canonical.includes('claude-fable-5-1') ||
     canonical.includes('claude-opus-5-5') ||
@@ -183,7 +197,14 @@ export function getModelMaxOutputTokens(model: string): {
 
   const m = getCanonicalName(model)
 
-  if (m.includes('claude-fable-5-1') || m.includes('claude-opus-5-5')) {
+  if (
+    m.includes('gpt-6-luna') ||
+    m.includes('gpt-5.6-terra') ||
+    m.includes('gpt-5.6-luna')
+  ) {
+    defaultTokens = 64_000
+    upperLimit = 128_000
+  } else if (m.includes('claude-fable-5-1') || m.includes('claude-opus-5-5')) {
     defaultTokens = 64_000
     upperLimit = 128_000
   } else if (m.includes('claude-sonnet-5-5') || m.includes('claude-haiku-5-5')) {
