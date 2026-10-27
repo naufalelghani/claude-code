@@ -29,13 +29,13 @@ The source includes defaults for the public App identifiers: slug `byv-dev-unorg
 
 ## User flow
 
-1. The user starts GitHub Organization login and opens the authorization link shown by the CLI.
-2. The user authorizes the GitHub App. The CLI expects the callback code and `state` in `code#state` format and checks the state against the current login session.
-3. The CLI exchanges the code using the PKCE verifier, then checks whether this App is installed on `BYV-Dev-Unorganization`.
-4. If the App is not installed, the CLI shows an installation link. An organization owner must install or approve the App; after that, the user restarts login. This install step is organization-wide, not something each member installs separately.
-5. The CLI verifies that the authenticated user's membership is `active`. Only after both installation and membership checks pass does the CLI request the internal access token and complete login.
+1. The CLI requests a device code from GitHub and opens `https://github.com/login/device`.
+2. The CLI displays a short user code. Enter it on the GitHub device page and authorize the App.
+3. The CLI polls GitHub using the provided polling interval until authorization succeeds or expires. This exchange does not use a Client Secret.
+4. The CLI verifies that this App is installed on `BYV-Dev-Unorganization`. If it is not installed, the CLI shows an installation link; an organization owner must install or approve it, then login can be retried.
+5. The CLI independently verifies that the authenticated user's organization membership is `active`. Only after both installation and membership checks pass does it request the internal access token and complete login.
 
-The CLI does not trust an `installation_id` parameter or the installation URL alone. It checks installations accessible to the authenticated GitHub App user token via GitHub's `GET /user/installations` endpoint, then independently checks membership via `GET /user/memberships/orgs/{org}`.
+The CLI checks installations accessible to the authenticated GitHub user token via GitHub's `GET /user/installations` endpoint, then independently checks membership via `GET /user/memberships/orgs/{org}`. Device Flow user codes expire; restart `/login` to get a fresh code if needed.
 
 ## Server-side authorization requirement
 
