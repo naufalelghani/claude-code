@@ -220,6 +220,9 @@ bun run ./scripts/build.ts --dev --feature=BRIDGE_MODE
 # Run from source (slower startup)
 bun run dev
 
+# Run tests (uses Bun's built-in test runner)
+npm test
+
 # OAuth login
 ./cli /login
 ```
