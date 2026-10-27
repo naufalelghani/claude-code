@@ -37,7 +37,7 @@ export function createTerminalInputFilter(): (chunk: string) => string {
             state = 'csi'
             continue
           }
-          if (code === 0x90 || code === 0x9e || code === 0x9f) {
+          if (code === 0x90 || code === 0x98 || code === 0x9e || code === 0x9f) {
             state = 'control-string'
             stringTerminator = 'st'
             continue
@@ -57,7 +57,12 @@ export function createTerminalInputFilter(): (chunk: string) => string {
           } else if (char === ']') {
             state = 'control-string'
             stringTerminator = 'bel-or-st'
-          } else if (char === 'P' || char === 'X' || char === '^' || char === '_') {
+          } else if (
+            char === 'P' ||
+            char === 'X' ||
+            char === '^' ||
+            char === '_'
+          ) {
             state = 'control-string'
             stringTerminator = 'st'
           } else if (code >= 0x20 && code <= 0x2f) {
