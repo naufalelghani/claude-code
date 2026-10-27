@@ -1,5 +1,4 @@
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '../../services/analytics/index.js'
-import { getGlobalConfig } from '../config.js'
 import { isEnvTruthy } from '../envUtils.js'
 
 export type APIProvider = 'firstParty' | 'bedrock' | 'vertex' | 'foundry' | 'openai'
@@ -9,6 +8,14 @@ type ProviderEnvironment = {
   CLAUDE_CODE_USE_VERTEX?: string
   CLAUDE_CODE_USE_FOUNDRY?: string
   CLAUDE_CODE_USE_OPENAI?: string
+}
+
+// Set after global config has been initialized, avoiding config disk reads
+// from module initialization paths. Persisted state is loaded by enableConfigs().
+let codexProviderActive = false
+
+export function setCodexProviderActive(active: boolean): void {
+  codexProviderActive = active
 }
 
 /** Pure provider resolution, exported so precedence is covered by unit tests. */
@@ -26,12 +33,9 @@ export function resolveAPIProvider(
 }
 
 export function getAPIProvider(): APIProvider {
-  const codexOAuth = getGlobalConfig().codexOAuth
-  // Existing Codex tokens predate the active preference. Treat those as the
-  // selected provider until the user logs into another provider explicitly.
-  const codexOAuthActive =
-    codexOAuth?.active ?? Boolean(codexOAuth?.accessToken)
-  return resolveAPIProvider(process.env, codexOAuthActive)
+  // This function is queried during module initialization. Never read config
+  // here: enableConfigs() hydrates this in-memory flag once config reads are safe.
+  return resolveAPIProvider(process.env, codexProviderActive)
 }
 
 export function getAPIProviderForStatsig(): AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
