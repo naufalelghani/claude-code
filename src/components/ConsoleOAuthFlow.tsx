@@ -11,7 +11,6 @@ import { getSSLErrorHint } from '../services/api/errorUtils.js';
 import { sendNotification } from '../services/notifier.js';
 import { runCodexOAuthFlow } from '../services/oauth/codex-client.js';
 import { OAuthService } from '../services/oauth/index.js';
-import crypto from 'crypto';
 import { handleGitHubManualCode, startGitHubOAuthFlow } from '../services/oauth/github-flow.js';
 import { getOauthAccountInfo, saveCodexOAuthTokens, setCodexOAuthActive, validateForceLoginOrg } from '../utils/auth.js';
 import { logError } from '../utils/log.js';
