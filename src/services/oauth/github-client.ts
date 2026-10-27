@@ -1,6 +1,5 @@
 // GitHub App authentication and organization membership checks
 import axios from 'axios'
-import { createDecipheriv } from 'node:crypto'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -12,44 +11,6 @@ const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 // Public application identifiers; these are not credentials.
 const E5QCJGUF = 'Iv23liLvuX9wFypmgl68'
 const GDR037 = 'byv-dev-unorganization'
-
-// AES-256-GCM encrypted Client Secret payload, formatted as ivHex:tagHex:ciphertextHex.
-// Leave empty until a newly rotated Client Secret has been encrypted.
-// NOTE: The key is shipped with this source, so this is obfuscation only—not
-// protection against someone who can read the repository.
-const X9CDJSA_ENCRYPTED = ''
-const X9CDJSA_KEY_PARTS = [
-  '6b7f2a91d4e8305c',
-  'a1c6e9f2037b4d85',
-  '9f0c2e7a5b1d8c43',
-  'e6a402d7195f83bc',
-] as const
-
-function decryptX9CDJSA(): string {
-  if (!X9CDJSA_ENCRYPTED) return ''
-
-  try {
-    const [ivHex, tagHex, ciphertextHex, ...extra] = X9CDJSA_ENCRYPTED.split(':')
-    if (!ivHex || !tagHex || !ciphertextHex || extra.length > 0) return ''
-
-    const key = Buffer.from(X9CDJSA_KEY_PARTS.join(''), 'hex')
-    const iv = Buffer.from(ivHex, 'hex')
-    const tag = Buffer.from(tagHex, 'hex')
-    const ciphertext = Buffer.from(ciphertextHex, 'hex')
-    if (key.length !== 32 || iv.length !== 12 || tag.length !== 16 || !ciphertext.length) {
-      return ''
-    }
-
-    const decipher = createDecipheriv('aes-256-gcm', key, iv)
-    decipher.setAuthTag(tag)
-    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
-  } catch {
-    // Invalid ciphertext should behave like a missing secret, not crash module import.
-    return ''
-  }
-}
-
-const X9CDJSA = decryptX9CDJSA()
 
 // Internal organization GitHub - only members of this org can use GitHub login
 const INTERNAL_ORG = 'BYV-Dev-Unorganization'
@@ -71,21 +32,12 @@ function getGitHubOAuthConfigErrorMessage(): string {
   if (!(process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF)) {
     missing.push('Client ID')
   }
-  // Device Flow does not require a Client Secret. The legacy authorization-code
-  // flow still checks for it at the point where the code is exchanged.
-  if (!(process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA)) {
-    // Do not add Client Secret to the general config error: device flow can work without it.
-  }
-
-  if (missing.length === 1 && missing[0] === 'Client Secret') {
-    return 'GitHub Organization login is not configured: Client Secret is missing. Set GITHUB_OAUTH_CLIENT_SECRET (or CLAUDE_CODE_GITHUB_CLIENT_SECRET), or set X9CDJSA in src/services/oauth/github-client.ts in your local working copy. Never commit the real secret.'
-  }
   return `GitHub Organization login is not configured. Missing: ${missing.join(', ')}.`
 }
 
 export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
   const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || X9CDJSA
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || ''
   const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037
 
   if (!clientId || !appSlug) {
