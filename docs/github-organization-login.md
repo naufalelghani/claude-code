@@ -30,15 +30,14 @@ The source includes defaults for the public App identifiers: slug `byv-dev-unorg
 
 1. The CLI requests a device code from GitHub and opens `https://github.com/login/device`.
 2. The CLI displays a short user code. Enter it on the GitHub device page and authorize the App.
-3. The CLI polls GitHub using the provided polling interval until authorization succeeds or expires. This exchange does not use a Client Secret.
-4. The CLI verifies that this App is installed on `BYV-Dev-Unorganization`. If it is not installed, the CLI shows an installation link; an organization owner must install or approve it, then login can be retried.
-5. The CLI independently verifies that the authenticated user's organization membership is `active`. Only after both installation and membership checks pass does it request the internal access token and complete login.
+3. The CLI polls GitHub until authorization succeeds, then verifies the App installation and active organization membership and fetches the GitHub profile.
+4. The CLI stores the GitHub session locally in the Claude Code config and reports GitHub login as successful. No Anthropic token-exchange endpoint is called.
 
-The CLI checks installations accessible to the authenticated GitHub user token via GitHub's `GET /user/installations` endpoint, then independently checks membership via `GET /user/memberships/orgs/{org}`. Device Flow user codes expire; restart `/login` to get a fresh code if needed.
+**Scope:** this completes GitHub identity login for local development. A GitHub token is not an Anthropic model-access token, so inference/provider wiring and plan entitlements must be implemented separately. Do not send the stored GitHub token to Anthropic API endpoints.
 
 ## Server-side authorization requirement
 
-The checks in this CLI prevent normal users from completing a login when installation or membership is missing, but a client-side check is not a security boundary: a modified CLI can skip it. Before this flow is used in production, the server behind `/api/oauth/github/exchange` must independently verify the GitHub identity, required App installation, and active organization membership before issuing an internal access token. That backend endpoint is not implemented in this repository, so its enforcement must be confirmed separately.
+The current local GitHub session only proves the user authenticated with GitHub and passed the client-side organization checks. The GitHub access token is stored locally in the user's Claude Code config for future plan features; it is not used as an Anthropic OAuth token. Client-side checks can be bypassed by a modified CLI, so this flow must not be treated as a server-enforced entitlement boundary.
 
 ## Troubleshooting
 
