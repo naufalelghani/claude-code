@@ -3,7 +3,7 @@
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js'
 import { installOAuthTokens } from '../../cli/handlers/auth.js'
 import { type OAuthStatus } from '../../components/ConsoleOAuthFlow.js'
-import { buildGitHubAuthUrl, githubOAuthExchangeCode } from './github-client.js'
+import { buildGitHubInstallUrl, githubOAuthExchangeCode } from './github-client.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
@@ -39,12 +39,11 @@ export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
   onDone: () => void,
   state: string,
-  codeVerifier: string,
 ): Promise<void> {
   try {
     logEvent('tengu_oauth_github_flow_start', {})
 
-    const authUrl = buildGitHubAuthUrl(codeVerifier, state)
+    const authUrl = buildGitHubInstallUrl(state)
 
     // Auto-open browser for GitHub OAuth flow (same behavior as Claude.ai login)
     try {
@@ -60,8 +59,9 @@ export async function startGitHubOAuthFlow(
       url: authUrl,
     })
 
-    // The code exchange happens in ConsoleOAuthFlow via handleManualAuthCodeInput
-    // This is handled by the callback function
+    // The app installation triggers GitHub App user authorization. The CLI
+    // receives the returned code/state through the manual callback input and
+    // validates both before exchanging the code.
   } catch (error) {
     logError(error as Error, 'GitHub OAuth flow failed')
     logEvent('tengu_oauth_github_error', {
