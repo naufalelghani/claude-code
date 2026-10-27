@@ -1,5 +1,6 @@
 // GitHub App authentication and organization membership checks
 import axios from 'axios'
+import { createDecipheriv } from 'node:crypto'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -12,9 +13,43 @@ const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 const E5QCJGUF = 'Iv23liLvuX9wFypmgl68'
 const GDR037 = 'byv-dev-unorganization'
 
-// Keep the Client Secret empty in the public repository. For a local-only
-// build, add a newly generated secret here without committing this change.
-const X9CDJSA = ''
+// AES-256-GCM encrypted Client Secret payload, formatted as ivHex:tagHex:ciphertextHex.
+// Leave empty until a newly rotated Client Secret has been encrypted.
+// NOTE: The key is shipped with this source, so this is obfuscation only—not
+// protection against someone who can read the repository.
+const X9CDJSA_ENCRYPTED = ''
+const X9CDJSA_KEY_PARTS = [
+  '6b7f2a91d4e8305c',
+  'a1c6e9f2037b4d85',
+  '9f0c2e7a5b1d8c43',
+  'e6a402d7195f83bc',
+] as const
+
+function decryptX9CDJSA(): string {
+  if (!X9CDJSA_ENCRYPTED) return ''
+
+  try {
+    const [ivHex, tagHex, ciphertextHex, ...extra] = X9CDJSA_ENCRYPTED.split(':')
+    if (!ivHex || !tagHex || !ciphertextHex || extra.length > 0) return ''
+
+    const key = Buffer.from(X9CDJSA_KEY_PARTS.join(''), 'hex')
+    const iv = Buffer.from(ivHex, 'hex')
+    const tag = Buffer.from(tagHex, 'hex')
+    const ciphertext = Buffer.from(ciphertextHex, 'hex')
+    if (key.length !== 32 || iv.length !== 12 || tag.length !== 16 || !ciphertext.length) {
+      return ''
+    }
+
+    const decipher = createDecipheriv('aes-256-gcm', key, iv)
+    decipher.setAuthTag(tag)
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')
+  } catch {
+    // Invalid ciphertext should behave like a missing secret, not crash module import.
+    return ''
+  }
+}
+
+const X9CDJSA = decryptX9CDJSA()
 
 // Internal organization GitHub - only members of this org can use GitHub login
 const INTERNAL_ORG = 'BYV-Dev-Unorganization'
