@@ -6,6 +6,7 @@ import {
   isClaudeAISubscriber,
 } from '../auth.js'
 import { getModelStrings } from './modelStrings.js'
+import { CURRENT_CLAUDE_MODELS } from './currentClaudeModels.js'
 import {
   COST_TIER_3_15,
   COST_TIER_5_25,
@@ -440,36 +441,30 @@ function getClaudeModelOption(
 
 function getAllPlanClaudeModelOptions(fastMode = false): ModelOption[] {
   const is3P = getAPIProvider() !== 'firstParty'
-  const price = (formatted: string) => is3P ? '' : ` · ${formatted}`
-  const opusPrice = fastMode ? COST_OPUS_55_FAST : COST_OPUS_55
 
-  return [
-    {
-      value: 'fable',
-      label: 'Fable 5.1',
-      description: `Fable 5.1 · For demanding reasoning and long-horizon agentic work${price(formatModelPricing(COST_FABLE_51))}`,
-      descriptionForModel: 'Fable 5.1 - for demanding reasoning and long-horizon agentic work',
-    },
-    {
-      value: 'opus',
-      label: 'Opus 5.5',
-      description: `Opus 5.5 · For long-running agentic coding and knowledge work${price(formatModelPricing(opusPrice))}`,
-      descriptionForModel: 'Opus 5.5 - for long-running agentic coding and knowledge work',
-    },
-    {
-      value: 'sonnet',
-      label: 'Sonnet 5.5',
-      description: `Sonnet 5.5 · Best combination of speed and intelligence${price(formatModelPricing(COST_SONNET_55))}`,
-      descriptionForModel: 'Sonnet 5.5 - best combination of speed and intelligence',
-    },
-    {
-      value: 'haiku',
-      label: 'Haiku 5.5',
-      description: `Haiku 5.5 · Fastest for high-volume, latency-sensitive tasks${is3P ? '' : ' · from $0.10/$0.50 per Mtok (tiered by prompt length)'}`,
-      descriptionForModel: 'Haiku 5.5 - fastest for high-volume, latency-sensitive tasks',
-    },
-  ]
+  return CURRENT_CLAUDE_MODELS.map(model => {
+    let priceSuffix = ''
+    if (!is3P) {
+      if (model.alias === 'fable') {
+        priceSuffix = ` · ${formatModelPricing(COST_FABLE_51)}`
+      } else if (model.alias === 'opus') {
+        priceSuffix = ` · ${formatModelPricing(fastMode ? COST_OPUS_55_FAST : COST_OPUS_55)}`
+      } else if (model.alias === 'sonnet') {
+        priceSuffix = ` · ${formatModelPricing(COST_SONNET_55)}`
+      } else {
+        priceSuffix = ' · from $0.10/$0.50 per Mtok (tiered by prompt length)'
+      }
+    }
+
+    return {
+      value: model.alias,
+      label: model.label,
+      description: `${model.label} · ${model.description}${priceSuffix}`,
+      descriptionForModel: `${model.label} - ${model.description}`,
+    }
+  })
 }
+
 function getInternalClaudeModelOptions(): ModelOption[] {
   return getAllPlanClaudeModelOptions()
 }
