@@ -152,6 +152,22 @@ function get3PFallbackSuggestion(model: string): string | undefined {
   }
 
   const lowerModel = model.toLowerCase()
+
+  // Do not suggest the same ID when one of the four current versions itself
+  // is unavailable in the selected third-party provider.
+  if (
+    lowerModel.includes('fable-5-1') ||
+    lowerModel.includes('fable_5_1') ||
+    lowerModel.includes('opus-5-5') ||
+    lowerModel.includes('opus_5_5') ||
+    lowerModel.includes('sonnet-5-5') ||
+    lowerModel.includes('sonnet_5_5') ||
+    lowerModel.includes('haiku-5-5') ||
+    lowerModel.includes('haiku_5_5')
+  ) {
+    return undefined
+  }
+
   if (/claude[-_.].*opus|opus[-_]([345])[-_]/.test(lowerModel)) {
     return getModelStrings().opus55
   }
