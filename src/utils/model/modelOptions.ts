@@ -469,11 +469,7 @@ function getAllPlanClaudeModelOptions(): ModelOption[] {
   ]
 }
 function getInternalClaudeModelOptions(): ModelOption[] {
-  return [
-    getClaudeModelOption('mythos5', 'Mythos 5', 'Mythos 5 - Claude 5 class (no safety classifiers)', formatModelPricing(COST_TIER_10_50)),
-    getClaudeModelOption('mythos51', 'Mythos 5.1', 'Mythos 5.1 - Claude 5 class (enhanced, no safety)', formatModelPricing(COST_TIER_10_50)),
-    ...getAllPlanClaudeModelOptions(),
-  ]
+  return getAllPlanClaudeModelOptions()
 }
 
 function getModelOptionsBase(fastMode = false): ModelOption[] {
@@ -503,8 +499,10 @@ function getModelFamilyInfo(
 ): { alias: string; currentVersionName: string } | null {
   const canonical = getCanonicalName(model)
 
-  // Sonnet family
+  // Sonnet family, with Sonnet 5.5 as the current version.
   if (
+    canonical.includes('claude-sonnet-5-5') ||
+    canonical.includes('claude-sonnet-5') ||
     canonical.includes('claude-sonnet-4-6') ||
     canonical.includes('claude-sonnet-4-5') ||
     canonical.includes('claude-sonnet-4-') ||
@@ -517,18 +515,20 @@ function getModelFamilyInfo(
     }
   }
 
-  // Opus family
-  if (canonical.includes('claude-opus-4')) {
+  // Opus family, with Opus 5.5 as the current version.
+  if (canonical.includes('claude-opus-5') || canonical.includes('claude-opus-4') || canonical.includes('claude-3-opus')) {
     const currentName = getMarketingNameForModel(getDefaultOpusModel())
     if (currentName) {
       return { alias: 'Opus', currentVersionName: currentName }
     }
   }
 
-  // Haiku family
+  // Haiku family, with Haiku 5.5 as the current version.
   if (
+    canonical.includes('claude-haiku-5-5') ||
     canonical.includes('claude-haiku') ||
-    canonical.includes('claude-3-5-haiku')
+    canonical.includes('claude-3-5-haiku') ||
+    canonical.includes('claude-3-haiku')
   ) {
     const currentName = getMarketingNameForModel(getDefaultHaikuModel())
     if (currentName) {
