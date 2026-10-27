@@ -66,7 +66,6 @@ export function buildGitHubInstallUrl(state: string): string {
  */
 export async function exchangeGitHubCodeForToken(
   authorizationCode: string,
-  codeVerifier: string,
 ): Promise<{
   accessToken: string
   scope: string[]
@@ -85,7 +84,6 @@ export async function exchangeGitHubCodeForToken(
         client_secret: config.clientSecret,
         redirect_uri: config.redirectUri,
         code: authorizationCode,
-        code_verifier: codeVerifier,
       },
       {
         headers: {
@@ -239,7 +237,6 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
  */
 export async function githubOAuthFlow(
   authorizationCode: string,
-  codeVerifier: string,
 ): Promise<{
   accessToken: string
   user: {
@@ -253,7 +250,6 @@ export async function githubOAuthFlow(
   // Exchange code for GitHub token
   const tokenResponse = await exchangeGitHubCodeForToken(
     authorizationCode,
-    codeVerifier,
   )
 
   if (!tokenResponse) {
@@ -316,7 +312,6 @@ export async function githubOAuthFlow(
  */
 export async function githubOAuthExchangeCode(
   authorizationCode: string,
-  codeVerifier: string,
 ): Promise<{
   accessToken: string
   user: {
@@ -327,5 +322,5 @@ export async function githubOAuthExchangeCode(
   } | null
   subscriptionType: 'internal'
 } | null> {
-  return githubOAuthFlow(authorizationCode, codeVerifier)
+  return githubOAuthFlow(authorizationCode)
 }
