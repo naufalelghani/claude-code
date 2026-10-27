@@ -10,7 +10,7 @@ import {
   logEvent,
 } from 'src/services/analytics/index.js'
 import { getModelStrings } from 'src/utils/model/modelStrings.js'
-import { getAPIProvider } from 'src/utils/model/providers.js'
+import { getAPIProvider, setCodexProviderActive } from 'src/utils/model/providers.js'
 import {
   getIsNonInteractiveSession,
   preferThirdPartyAuthentication,
@@ -1332,6 +1332,7 @@ export function saveCodexOAuthTokens(tokens: CodexTokens): void {
       active: true,
     },
   }))
+  setCodexProviderActive(true)
 }
 
 /**
@@ -1349,6 +1350,7 @@ export function setCodexOAuthActive(active: boolean): void {
       },
     }
   })
+  setCodexProviderActive(active)
 }
 
 /**
@@ -1382,6 +1384,7 @@ export function clearCodexOAuthTokens(): void {
     const { codexOAuth: _removed, ...rest } = cfg
     return rest as typeof cfg
   })
+  setCodexProviderActive(false)
 }
 
 
