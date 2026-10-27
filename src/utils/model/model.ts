@@ -689,27 +689,14 @@ export function parseUserSpecifiedModel(
 
   if (isModelAlias(modelString)) {
     switch (modelString) {
-      case 'opusplan':
-        return routeInternalModel(
-          getDefaultSonnetModel(),
-          has1mTag,
-        ) // Sonnet is default, Opus in plan mode
+      case 'fable':
+        return routeInternalModel(getDefaultFableModel(), has1mTag)
+      case 'opus':
+        return routeInternalModel(getDefaultOpusModel(), has1mTag)
       case 'sonnet':
         return routeInternalModel(getDefaultSonnetModel(), has1mTag)
       case 'haiku':
         return routeInternalModel(getDefaultHaikuModel(), has1mTag)
-      case 'opus':
-        return routeInternalModel(getDefaultOpusModel(), has1mTag)
-      case 'best':
-        return routeInternalModel(getBestModel(), has1mTag)
-      case 'fable':
-        return routeInternalModel(getDefaultFableModel(), has1mTag)
-      case 'mythos':
-        if (!isInternalSubscriber() && process.env.USER_TYPE !== 'ant') {
-          return getDefaultFableModel() + (has1mTag ? '[1m]' : '')
-        }
-        return routeInternalModel(getDefaultMythosModel(), has1mTag)
-      default:
     }
   }
 
