@@ -9,7 +9,7 @@ import { Box, Text } from '../ink.js';
 import { useKeybindings } from '../keybindings/useKeybinding.js';
 import { useAppState, useSetAppState } from '../state/AppState.js';
 import { convertEffortValueToLevel, type EffortLevel, getDefaultEffortForModel, modelSupportsEffort, modelSupportsMaxEffort, resolvePickerEffortPersistence, toPersistableEffort } from '../utils/effort.js';
-import { getDefaultMainLoopModel, type ModelSetting, modelDisplayString, parseUserSpecifiedModel } from '../utils/model/model.js';
+import { getDefaultMainLoopModel, type ModelSetting, modelDisplayString, normalizeModelSettingForPicker, parseUserSpecifiedModel } from '../utils/model/model.js';
 import { getModelOptions } from '../utils/model/modelOptions.js';
 import { getSettingsForSource, updateSettingsForSource } from '../utils/settings/settings.js';
 import { ConfigurableShortcutHint } from './ConfigurableShortcutHint.js';
@@ -50,7 +50,8 @@ export function ModelPicker(t0) {
   } = t0;
   const setAppState = useSetAppState();
   const exitState = useExitOnCtrlCDWithKeybindings();
-  const initialValue = initial === null ? NO_PREFERENCE : initial;
+  const normalizedInitial = normalizeModelSettingForPicker(initial);
+  const initialValue = normalizedInitial === null ? NO_PREFERENCE : normalizedInitial;
   const [focusedValue, setFocusedValue] = useState(initialValue);
   const isFastMode = useAppState(_temp);
   const [hasToggledEffort, setHasToggledEffort] = useState(false);
@@ -76,23 +77,23 @@ export function ModelPicker(t0) {
   const modelOptions = t3;
   let t4;
   bb0: {
-    if (initial !== null && !modelOptions.some(opt => opt.value === initial)) {
+    if (normalizedInitial !== null && !modelOptions.some(opt => opt.value === normalizedInitial)) {
       let t5;
-      if ($[4] !== initial) {
-        t5 = modelDisplayString(initial);
-        $[4] = initial;
+      if ($[4] !== normalizedInitial) {
+        t5 = modelDisplayString(normalizedInitial);
+        $[4] = normalizedInitial;
         $[5] = t5;
       } else {
         t5 = $[5];
       }
       let t6;
-      if ($[6] !== initial || $[7] !== t5) {
+      if ($[6] !== normalizedInitial || $[7] !== t5) {
         t6 = {
-          value: initial,
+          value: normalizedInitial,
           label: t5,
           description: "Current model"
         };
-        $[6] = initial;
+        $[6] = normalizedInitial;
         $[7] = t5;
         $[8] = t6;
       } else {
