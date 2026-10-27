@@ -230,6 +230,19 @@ export type GlobalConfig = {
   oauthAccount?: AccountInfo
 
   /**
+   * Local GitHub Organization login session. This is a GitHub credential,
+   * not an Anthropic OAuth token; provider/model auth is configured separately.
+   */
+  githubOAuth?: {
+    accessToken: string
+    login: string
+    name: string
+    email: string
+    avatarUrl: string
+    expiresAt: number
+  }
+
+  /**
    * OpenAI Codex OAuth tokens, stored separately from Anthropic credentials.
    * These are acquired via the Codex OAuth flow (auth.openai.com) and are used
    * as Bearer tokens against OpenAI's API — they are never sent to Anthropic servers.

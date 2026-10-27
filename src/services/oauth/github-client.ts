@@ -1,4 +1,4 @@
-// GitHub OAuth service for internal Anthropic team members
+// GitHub App authentication and organization membership checks
 import axios from 'axios'
 import { getOauthConfig } from '../../constants/oauth.js'
 import { logError } from '../../utils/log.js'
@@ -8,8 +8,9 @@ const GITHUB_OAUTH_BASE_URL = 'https://github.com'
 const GITHUB_API_BASE_URL = 'https://api.github.com'
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 
-// GitHub OAuth scopes needed for organization membership verification
-const GITHUB_OAUTH_SCOPES = ['read:user', 'read:org'].join(' ')
+// Public application identifiers; these are not credentials.
+const E5QCJGUF = 'Iv23liLvuX9wFypmgl68'
+const GDR037 = 'byv-dev-unorganization'
 
 // Internal organization GitHub - only members of this org can use GitHub login
 const INTERNAL_ORG = 'BYV-Dev-Unorganization'
@@ -19,43 +20,142 @@ interface GitHubOAuthConfig {
   clientId: string
   clientSecret: string
   redirectUri: string
+  appSlug: string
 }
 
 // Get GitHub OAuth config from environment or settings
-export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET
+function getGitHubOAuthConfigErrorMessage(): string {
+  const missing: string[] = []
+  if (!(process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037)) {
+    missing.push('App slug')
+  }
+  if (!(process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF)) {
+    missing.push('Client ID')
+  }
+  return `GitHub Organization login is not configured. Missing: ${missing.join(', ')}.`
+}
 
-  if (!clientId || !clientSecret) {
+export function getGitHubOAuthConfig(): GitHubOAuthConfig | null {
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.CLAUDE_CODE_GITHUB_CLIENT_SECRET || ''
+  const appSlug = process.env.GITHUB_APP_SLUG || process.env.CLAUDE_CODE_GITHUB_APP_SLUG || GDR037
+
+  if (!clientId || !appSlug) {
     return null
   }
 
   return {
     clientId,
     clientSecret,
+    appSlug,
     redirectUri: getOauthConfig().MANUAL_REDIRECT_URL
   }
 }
 
 /**
- * Build the GitHub OAuth authorization URL
+ * Start a normal GitHub App user-authorization flow for each CLI user.
+ * This is necessary because an organization installation is shared and
+ * organization members other than the installer must authorize the App
+ * independently.
  */
 export function buildGitHubAuthUrl(codeChallenge: string, state: string): string {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error('GitHub OAuth not configured')
+    throw new Error(getGitHubOAuthConfigErrorMessage())
   }
 
   const url = new URL(`${GITHUB_OAUTH_BASE_URL}/login/oauth/authorize`)
-  url.searchParams.append('client_id', config.clientId)
-  url.searchParams.append('redirect_uri', config.redirectUri)
-  url.searchParams.append('response_type', 'code')
-  url.searchParams.append('scope', GITHUB_OAUTH_SCOPES)
-  url.searchParams.append('state', state)
-  url.searchParams.append('code_challenge', codeChallenge)
-  url.searchParams.append('code_challenge_method', 'S256')
-
+  url.searchParams.set('client_id', config.clientId)
+  url.searchParams.set('redirect_uri', config.redirectUri)
+  url.searchParams.set('state', state)
+  url.searchParams.set('code_challenge', codeChallenge)
+  url.searchParams.set('code_challenge_method', 'S256')
   return url.toString()
+}
+
+/**
+ * Build the one-time installation link shown when the required organization
+ * has not installed the App yet. Organization owners may need to approve it.
+ */
+export function buildGitHubInstallUrl(): string {
+  const config = getGitHubOAuthConfig()
+  if (!config) {
+    throw new Error(getGitHubOAuthConfigErrorMessage())
+  }
+
+  return `${GITHUB_OAUTH_BASE_URL}/apps/${encodeURIComponent(config.appSlug)}/installations/new`
+}
+
+/**
+ * Start GitHub Device Flow. This is suitable for CLI clients and does not use
+ * a Client Secret. Device Flow must be enabled in the GitHub App settings.
+ */
+export async function requestGitHubDeviceCode(): Promise<{
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  interval: number
+  expiresIn: number
+}> {
+  const response = await axios.post(
+    `${GITHUB_OAUTH_BASE_URL}/login/device/code`,
+    new URLSearchParams({ client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF }),
+    { headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 },
+  )
+  if (response.data?.error) {
+    if (response.data.error === 'device_flow_disabled') {
+      throw new Error('GitHub Device Flow is disabled. Enable Device Flow in the byv-dev-unorganization GitHub App settings, then retry login.')
+    }
+    throw new Error(response.data.error_description || response.data.error)
+  }
+  const data = response.data
+  if (!data?.device_code || !data?.user_code || !data?.verification_uri) {
+    throw new Error('GitHub did not return a valid device authorization code.')
+  }
+  return {
+    deviceCode: data.device_code,
+    userCode: data.user_code,
+    verificationUri: data.verification_uri,
+    interval: Math.max(5, Number(data.interval) || 5),
+    expiresIn: Math.max(60, Number(data.expires_in) || 900),
+  }
+}
+
+/**
+ * Poll GitHub until the user approves Device Flow, is denied, or the code
+ * expires. GitHub requires using the supplied polling interval.
+ */
+export async function pollGitHubDeviceCode(
+  deviceCode: string,
+  initialInterval: number,
+  expiresIn: number,
+): Promise<string> {
+  const deadline = Date.now() + expiresIn * 1000
+  let interval = Math.max(5, initialInterval)
+  while (Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, interval * 1000))
+    if (Date.now() >= deadline) break
+    const response = await axios.post(
+      GITHUB_TOKEN_URL,
+      new URLSearchParams({
+        client_id: process.env.GITHUB_OAUTH_CLIENT_ID || process.env.CLAUDE_CODE_GITHUB_CLIENT_ID || E5QCJGUF,
+        device_code: deviceCode,
+        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+      }),
+      { headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 15000 },
+    )
+    if (response.data?.access_token) return response.data.access_token
+    const error = response.data?.error
+    if (error === 'authorization_pending') continue
+    if (error === 'slow_down') {
+      interval += 5
+      continue
+    }
+    if (error === 'access_denied') throw new Error('GitHub Device Flow authorization was denied.')
+    if (error === 'expired_token') throw new Error('GitHub device code expired. Restart /login and try again.')
+    if (error) throw new Error(response.data.error_description || `GitHub Device Flow failed: ${error}`)
+  }
+  throw new Error('GitHub device code expired. Restart /login and try again.')
 }
 
 /**
@@ -64,14 +164,13 @@ export function buildGitHubAuthUrl(codeChallenge: string, state: string): string
 export async function exchangeGitHubCodeForToken(
   authorizationCode: string,
   codeVerifier: string,
-): Promise<{
-  accessToken: string
-  scope: string[]
-  tokenType: string
-} | null> {
+): Promise<{ accessToken: string } | null> {
   const config = getGitHubOAuthConfig()
   if (!config) {
-    throw new Error('GitHub OAuth not configured')
+    throw new Error(getGitHubOAuthConfigErrorMessage())
+  }
+  if (!config.clientSecret) {
+    throw new Error('GitHub authorization-code flow requires a Client Secret. Use Device Flow for CLI login, or set GITHUB_OAUTH_CLIENT_SECRET.')
   }
 
   try {
@@ -83,7 +182,6 @@ export async function exchangeGitHubCodeForToken(
         redirect_uri: config.redirectUri,
         code: authorizationCode,
         code_verifier: codeVerifier,
-        state: codeVerifier, // Using codeVerifier as state for PKCE
       },
       {
         headers: {
@@ -100,34 +198,124 @@ export async function exchangeGitHubCodeForToken(
 
     return {
       accessToken: response.data.access_token,
-      scope: response.data.scope?.split(' ') ?? GITHUB_OAUTH_SCOPES.split(' '),
-      tokenType: response.data.token_type,
     }
   } catch (error) {
-    logError(error as Error, 'GitHub OAuth token exchange failed')
-    return null
+    logError(error as Error, 'GitHub App token exchange failed')
+    throw new Error(
+      'GitHub authorization code exchange failed. Check the GitHub App Client ID, Client Secret, and registered callback URL, then restart login.',
+    )
   }
 }
 
 /**
- * Verify that the user is a member of the Anthropic GitHub organization
+ * Pure predicates kept separately so the installation and membership rules
+ * can be covered by unit tests without making live GitHub API requests.
+ */
+export function hasRequiredGitHubAppInstallation(
+  installations: unknown,
+  appSlug: string,
+  organization: string,
+): boolean {
+  if (!Array.isArray(installations)) return false
+
+  return installations.some((value: unknown) => {
+    if (typeof value !== 'object' || value === null) return false
+    const installation = value as {
+      app_slug?: string
+      target_type?: string
+      account?: { login?: string }
+    }
+    return (
+      installation.app_slug?.toLowerCase() === appSlug.toLowerCase() &&
+      installation.target_type === 'Organization' &&
+      installation.account?.login?.toLowerCase() === organization.toLowerCase()
+    )
+  })
+}
+
+export function isActiveGitHubOrgMembershipState(state: unknown): boolean {
+  return state === 'active'
+}
+
+/**
+ * Verify the GitHub App is installed on the required organization and that the
+ * authenticated user can access that installation. This endpoint is scoped to
+ * the GitHub App represented by this user access token.
+ */
+export async function verifyGitHubAppInstallation(
+  accessToken: string,
+): Promise<boolean> {
+  const config = getGitHubOAuthConfig()
+  if (!config) {
+    throw new Error(getGitHubOAuthConfigErrorMessage())
+  }
+
+  try {
+    for (let page = 1; page <= 100; page += 1) {
+      const response = await axios.get(
+        `${GITHUB_API_BASE_URL}/user/installations`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          params: { per_page: 100, page },
+          timeout: 10000,
+        },
+      )
+
+      const installations = response.data?.installations ?? []
+      if (hasRequiredGitHubAppInstallation(installations, config.appSlug, INTERNAL_ORG)) {
+        return true
+      }
+      if (
+        installations.length < 100 ||
+        (typeof response.data?.total_count === 'number' &&
+          page * 100 >= response.data.total_count)
+      ) {
+        return false
+      }
+    }
+
+    return false
+  } catch (error) {
+    logError(error as Error, 'GitHub App installation verification failed')
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      if (status === 401) {
+        throw new Error('GitHub authorization expired or was rejected. Restart GitHub Organization login.')
+      }
+      if (status === 403) {
+        throw new Error('GitHub denied access to the App installation list. Check the GitHub App configuration and the account permissions, then try again.')
+      }
+    }
+    throw new Error('Could not verify the GitHub App installation with GitHub. Check the network connection and try again.')
+  }
+}
+
+/**
+ * Verify that the authenticated user is an active member of the required
+ * GitHub organization. This endpoint describes the current user, not all
+ * organization members.
  */
 export async function verifyGitHubOrgMembership(
   accessToken: string,
 ): Promise<boolean> {
   try {
     const response = await axios.get(
-      `${GITHUB_API_BASE_URL}/orgs/${INTERNAL_ORG}/memberships`,
+      `${GITHUB_API_BASE_URL}/user/memberships/orgs/${encodeURIComponent(INTERNAL_ORG)}`,
       {
         headers: {
-          Authorization: `token ${accessToken}`,
-          Accept: 'application/vnd.github.v3+json',
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
         },
         timeout: 10000,
       },
     )
 
-    if (response.status === 200 && response.data.state === 'active') {
+    if (response.status === 200 && isActiveGitHubOrgMembershipState(response.data.state)) {
       return true
     }
 
@@ -135,11 +323,22 @@ export async function verifyGitHubOrgMembership(
       status: response.status,
       state: response.data?.state,
     })
-
     return false
   } catch (error) {
     logError(error as Error, 'GitHub org membership verification failed')
-    return false
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      if (status === 401) {
+        throw new Error('GitHub authorization expired or was rejected. Restart GitHub Organization login.')
+      }
+      if (status === 403) {
+        throw new Error('GitHub denied the organization membership check. Ensure the GitHub App has organization Members read-only permission, then retry.')
+      }
+      if (status === 404) {
+        return false
+      }
+    }
+    throw new Error('Could not verify GitHub organization membership with GitHub. Check the network connection and try again.')
   }
 }
 
@@ -155,8 +354,9 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
   try {
     const response = await axios.get(`${GITHUB_API_BASE_URL}/user`, {
       headers: {
-        Authorization: `token ${accessToken}`,
-        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
       },
       timeout: 10000,
     })
@@ -164,7 +364,7 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
     return {
       login: response.data.login,
       name: response.data.name ?? response.data.login,
-      email: response.data.email ?? response.data.email,
+      email: response.data.email ?? '',
       avatarUrl: response.data.avatar_url,
     }
   } catch (error) {
@@ -174,9 +374,9 @@ export async function getGitHubUserInfo(accessToken: string): Promise<{
 }
 
 /**
- * Verify GitHub OAuth token and exchange for internal CLAUDE_CODE_OAUTH_TOKEN
- * This function handles the full GitHub OAuth flow and returns an OAuth token
- * that can be used like any other Claude Code OAuth token
+ * Validate a GitHub identity for the local GitHub login session.
+ * The GitHub access token is not an Anthropic API token and must not be used
+ * for Anthropic inference requests.
  */
 export async function githubOAuthFlow(
   authorizationCode: string,
@@ -189,7 +389,7 @@ export async function githubOAuthFlow(
     email: string
     avatarUrl: string
   }
-  subscriptionType: 'internal'
+  subscriptionType: 'github'
 } | null> {
   // Exchange code for GitHub token
   const tokenResponse = await exchangeGitHubCodeForToken(
@@ -200,53 +400,49 @@ export async function githubOAuthFlow(
   if (!tokenResponse) {
     return null
   }
+  return githubOAuthFlowWithAccessToken(tokenResponse.accessToken)
+}
 
-  // Verify organization membership
-  const isOrgMember = await verifyGitHubOrgMembership(tokenResponse.accessToken)
+export async function githubOAuthFlowWithAccessToken(accessToken: string): Promise<{
+  accessToken: string
+  user: { login: string; name: string; email: string; avatarUrl: string }
+  subscriptionType: 'github'
+} | null> {
+  // Require both the GitHub App installation and active membership. Neither
+  // check can substitute for the other.
+  const isAppInstalled = await verifyGitHubAppInstallation(accessToken)
+  if (!isAppInstalled) {
+    const installUrl = buildGitHubInstallUrl()
+    throw new Error(
+      `The GitHub App is not installed on ${INTERNAL_ORG}. Ask an organization owner to install or approve it, then restart login.\nInstall link: ${installUrl}`,
+    )
+  }
 
+  const isOrgMember = await verifyGitHubOrgMembership(accessToken)
   if (!isOrgMember) {
     throw new Error(
-      'You must be a member of the Anthropic GitHub organization to use this login method.',
+      `Your GitHub account must have active membership in the ${INTERNAL_ORG} organization to use this login method.`,
     )
   }
 
   // Get user info
-  const userInfo = await getGitHubUserInfo(tokenResponse.accessToken)
+  const userInfo = await getGitHubUserInfo(accessToken)
 
   if (!userInfo) {
     throw new Error('Failed to retrieve GitHub user information')
   }
 
-  // Exchange GitHub token for internal Anthropic OAuth token
-  const anthropicTokenResponse = await axios.post(
-    `${getOauthConfig().BASE_API_URL}/api/oauth/github/exchange`,
-    {
-      github_access_token: tokenResponse.accessToken,
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    },
-  )
-
-  if (anthropicTokenResponse.status !== 200) {
-    throw new Error(
-      `Failed to exchange GitHub token: ${anthropicTokenResponse.statusText}`,
-    )
-  }
-
+  // The CLI's GitHub login ends with a verified GitHub identity. Keep this
+  // token labeled as GitHub auth; do not send it to Anthropic as an OAuth token.
   return {
-    accessToken: anthropicTokenResponse.data.access_token,
+    accessToken,
     user: userInfo,
-    subscriptionType: 'internal',
+    subscriptionType: 'github',
   }
 }
 
 /**
- * Exchange GitHub OAuth code and get Anthropic internal token
- * Public API for GitHub OAuth flow initiation
+ * Validate a GitHub OAuth code and return a GitHub identity session.
  */
 export async function githubOAuthExchangeCode(
   authorizationCode: string,
@@ -259,7 +455,7 @@ export async function githubOAuthExchangeCode(
     email: string
     avatarUrl: string
   } | null
-  subscriptionType: 'internal'
+  subscriptionType: 'github'
 } | null> {
   return githubOAuthFlow(authorizationCode, codeVerifier)
 }

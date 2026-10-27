@@ -11,9 +11,7 @@ import { getSSLErrorHint } from '../services/api/errorUtils.js';
 import { sendNotification } from '../services/notifier.js';
 import { runCodexOAuthFlow } from '../services/oauth/codex-client.js';
 import { OAuthService } from '../services/oauth/index.js';
-import { buildGitHubAuthUrl, githubOAuthExchangeCode } from '../services/oauth/github-client.js';
-import crypto from 'crypto';
-import { startGitHubOAuthFlow } from '../services/oauth/github-flow.js';
+import { handleGitHubManualCode, startGitHubOAuthFlow } from '../services/oauth/github-flow.js';
 import { getOauthAccountInfo, saveCodexOAuthTokens, setCodexOAuthActive, validateForceLoginOrg } from '../utils/auth.js';
 import { logError } from '../utils/log.js';
 import { getSettings_DEPRECATED } from '../utils/settings/settings.js';
@@ -39,6 +37,8 @@ type OAuthStatus = {
 | {
   state: 'waiting_for_login';
   url: string;
+  userCode?: string;
+  deviceFlow?: boolean;
 } // Browser opened, waiting for user to login
 | {
   state: 'creating_api_key';
@@ -54,7 +54,7 @@ type OAuthStatus = {
   message: string;
   toRetry?: OAuthStatus;
 };
-const PASTE_HERE_MSG = 'Paste code here if prompted > ';
+const PASTE_HERE_MSG = 'Paste code#state here > ';
 export function ConsoleOAuthFlow({
   onDone,
   startingMessage,
@@ -64,7 +64,7 @@ export function ConsoleOAuthFlow({
   const settings = getSettings_DEPRECATED() || {};
   const forceLoginMethod = forceLoginMethodProp ?? settings.forceLoginMethod;
   const orgUUID = settings.forceLoginOrgUUID;
-  const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : null;
+  const forcedMethodMessage = forceLoginMethod === 'claudeai' ? 'Login method pre-selected: Subscription Plan (Claude Pro/Max)' : forceLoginMethod === 'console' ? 'Login method pre-selected: API Usage Billing (Anthropic Console)' : forceLoginMethod === 'github' ? 'Login method pre-selected: GitHub Organization' : null;
   const terminal = useTerminalNotification();
   const [oauthStatus, setOAuthStatus] = useState<OAuthStatus>(() => {
     if (mode === 'setup-token') {
@@ -72,7 +72,7 @@ export function ConsoleOAuthFlow({
         state: 'ready_to_start'
       };
     }
-    if (forceLoginMethod === 'claudeai' || forceLoginMethod === 'console') {
+    if (forceLoginMethod === 'claudeai' || forceLoginMethod === 'console' || forceLoginMethod === 'github') {
       return {
         state: 'ready_to_start'
       };
@@ -93,6 +93,9 @@ export function ConsoleOAuthFlow({
   // browser did not open automatically. In this flow we expect the user to
   // copy the code from the browser and paste it in the terminal
   const [showPastePrompt, setShowPastePrompt] = useState(false);
+  // Keep the one-time GitHub callback state for this login attempt so a
+  // pasted callback cannot be reused across sessions.
+  const githubOAuthSessionRef = useRef<{ state: string; codeVerifier: string } | null>(null);
   const [urlCopied, setUrlCopied] = useState(false);
   const textInputColumns = useTerminalSize().columns - PASTE_HERE_MSG.length - 1;
 
@@ -160,16 +163,44 @@ export function ConsoleOAuthFlow({
   async function handleSubmitCode(value: string, url: string) {
     try {
       // Expecting format "authorizationCode#state" from the authorization callback URL
-      const [authorizationCode, state] = value.split('#');
+      const [authorizationCode, state] = value.trim().split('#');
       if (!authorizationCode || !state) {
         setOAuthStatus({
           state: 'error',
-          message: 'Invalid code. Please make sure the full code was copied',
+          message: 'Invalid code. Paste the authorization code and state separated by #.',
           toRetry: {
             state: 'waiting_for_login',
             url
           }
         });
+        return;
+      }
+
+      const githubSession = githubOAuthSessionRef.current;
+      if (githubSession) {
+        if (state !== githubSession.state) {
+          setOAuthStatus({
+            state: 'error',
+            message: 'GitHub login state did not match this session. Restart GitHub login and try again.',
+            toRetry: { state: 'idle' }
+          });
+          githubOAuthSessionRef.current = null;
+          return;
+        }
+
+        await handleGitHubManualCode(
+          authorizationCode,
+          githubSession.codeVerifier,
+          setOAuthStatus,
+          () => {
+            githubOAuthSessionRef.current = null;
+            void sendNotification({
+              message: 'GitHub login successful',
+              notificationType: 'auth_success'
+            }, terminal);
+            onDone();
+          },
+        );
         return;
       }
 
@@ -192,6 +223,7 @@ export function ConsoleOAuthFlow({
     }
   }
   const startOAuth = useCallback(async () => {
+    githubOAuthSessionRef.current = null;
     try {
       logEvent('tengu_oauth_flow_start', {
         loginWithClaudeAi
@@ -272,6 +304,7 @@ export function ConsoleOAuthFlow({
 
   // Codex-specific OAuth flow — completely separate from the Anthropic OAuthService
   const startCodexOAuth = useCallback(async () => {
+    githubOAuthSessionRef.current = null;
     try {
       logEvent('tengu_oauth_codex_flow_start', {});
       const codexTokens = await runCodexOAuthFlow(async (url) => {
@@ -296,23 +329,30 @@ export function ConsoleOAuthFlow({
   const startGitHubOAuth = useCallback(async () => {
     try {
       logEvent('tengu_oauth_github_flow_start', {});
-      // Generate PKCE code verifier and state for GitHub OAuth
-      const codeVerifier = crypto.randomBytes(32).toString('base64url');
-      const state = crypto.randomBytes(16).toString('base64url');
+      // Device Flow uses a one-time GitHub user code and does not need a Client Secret.
+      githubOAuthSessionRef.current = null;
+      setShowPastePrompt(false);
 
-      // Start the GitHub OAuth flow (this will auto-open browser)
+      // Authenticate the current GitHub user. If the organization App is not
+      // installed yet, the error response includes the install/request link.
+      // Show the authorization URL in remote/headless terminals as well.
       await startGitHubOAuthFlow(
-        (status) => setOAuthStatus(status),
+        (status) => {
+          setOAuthStatus(status);
+          if (status.state === 'waiting_for_login' && !status.deviceFlow) {
+            setTimeout(setShowPastePrompt, 3000, true);
+          }
+          if (status.deviceFlow) setShowPastePrompt(false);
+        },
         () => {
-          // onDone callback - success path
+          githubOAuthSessionRef.current = null;
+          setShowPastePrompt(false);
           void sendNotification({
             message: 'GitHub login successful',
             notificationType: 'auth_success'
           }, terminal);
           onDone();
         },
-        state,
-        codeVerifier,
       );
     } catch (err) {
       const msg = (err as Error).message;
@@ -321,7 +361,7 @@ export function ConsoleOAuthFlow({
       });
       setOAuthStatus({ state: 'error', message: msg, toRetry: { state: 'idle' } });
     }
-  }, [onDone, terminal]);
+  }, [setShowPastePrompt, terminal, onDone]);
 
   // Handler for GitHub login selection from the login method dropdown
   const handleGitHubLogin = useCallback(() => {
@@ -336,7 +376,12 @@ export function ConsoleOAuthFlow({
   useEffect(() => {
     if (oauthStatus.state === 'ready_to_start' && !pendingOAuthStartRef.current) {
       pendingOAuthStartRef.current = true;
-      if (loginWithCodex) {
+      if (forceLoginMethod === 'github') {
+        process.nextTick((startGitHubOAuth_0: () => Promise<void>, pendingOAuthStartRef_0: React.MutableRefObject<boolean>) => {
+          void startGitHubOAuth_0();
+          pendingOAuthStartRef_0.current = false;
+        }, startGitHubOAuth, pendingOAuthStartRef);
+      } else if (loginWithCodex) {
         process.nextTick((startCodexOAuth_0: () => Promise<void>, pendingOAuthStartRef_0: React.MutableRefObject<boolean>) => {
           void startCodexOAuth_0();
           pendingOAuthStartRef_0.current = false;
@@ -348,7 +393,7 @@ export function ConsoleOAuthFlow({
         }, startOAuth, pendingOAuthStartRef);
       }
     }
-  }, [oauthStatus.state, startOAuth, startCodexOAuth, loginWithCodex]);
+  }, [oauthStatus.state, startOAuth, startCodexOAuth, startGitHubOAuth, loginWithCodex, forceLoginMethod]);
 
   // Auto-exit for setup-token mode
   useEffect(() => {
@@ -372,10 +417,12 @@ export function ConsoleOAuthFlow({
     };
   }, [oauthService]);
   return <Box flexDirection="column" gap={1}>
-      {oauthStatus.state === 'waiting_for_login' && showPastePrompt && <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
+      {oauthStatus.state === 'waiting_for_login' && (showPastePrompt || oauthStatus.deviceFlow) && <Box flexDirection="column" key="urlToCopy" gap={1} paddingBottom={1}>
           <Box paddingX={1}>
             <Text dimColor>
-              Browser didn&apos;t open? Use the url below to sign in{' '}
+              {oauthStatus.deviceFlow
+                ? 'Open the GitHub device page and enter the code below.'
+                : 'Browser didn\'t open? Use the url below to sign in'}{' '}
             </Text>
             {urlCopied ? <Text color="success">(Copied!)</Text> : <Text dimColor>
                 <KeyboardShortcutHint shortcut="c" action="copy" parens />
@@ -384,6 +431,9 @@ export function ConsoleOAuthFlow({
           <Link url={oauthStatus.url}>
             <Text dimColor>{oauthStatus.url}</Text>
           </Link>
+          {oauthStatus.deviceFlow && oauthStatus.userCode && <Box paddingX={1}>
+            <Text color="warning">Enter this code at GitHub: {oauthStatus.userCode}</Text>
+          </Box>}
         </Box>}
       {mode === 'setup-token' && oauthStatus.state === 'success' && oauthStatus.token && <Box key="tokenOutput" flexDirection="column" gap={1} paddingTop={1}>
             <Text color="success">

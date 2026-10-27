@@ -1,69 +1,73 @@
 // GitHub OAuth flow for ConsoleOAuthFlow integration
 // This module provides GitHub Organization login support for Internal team members
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js'
-import { installOAuthTokens } from '../../cli/handlers/auth.js'
 import { type OAuthStatus } from '../../components/ConsoleOAuthFlow.js'
-import { buildGitHubAuthUrl, githubOAuthExchangeCode } from './github-client.js'
+import { saveGlobalConfig } from '../../utils/config.js'
+import { githubOAuthExchangeCode, githubOAuthFlowWithAccessToken, pollGitHubDeviceCode, requestGitHubDeviceCode } from './github-client.js'
 import { logError } from '../../utils/log.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { openBrowser } from '../../utils/browser.js'
-import crypto from 'crypto'
 
-// PKCE utilities for GitHub OAuth flow
-function generateCodeVerifier(): string {
-  return base64URLEncode(crypto.randomBytes(32))
-}
-
-function base64URLEncode(buffer: Buffer): string {
-  return buffer.toString('base64url')
-}
-
-function generateState(): string {
-  return base64URLEncode(crypto.randomBytes(16))
+function saveGitHubLoginSession(
+  accessToken: string,
+  user: { login: string; name: string; email: string; avatarUrl: string },
+): void {
+  saveGlobalConfig(current => ({
+    ...current,
+    hasCompletedOnboarding: true,
+    githubOAuth: {
+      accessToken,
+      login: user.login,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+      expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+    },
+  }))
 }
 
 /**
- * Start the GitHub OAuth flow for internal team members.
- * This function handles:
- * 1. Building the GitHub auth URL with PKCE
- * 2. Opening the browser for authentication
- * 3. Handling the callback (manual code entry)
- * 4. Exchanging the GitHub token for an internal Anthropic OAuth token
- * 5. Installing the tokens
- *
- * @param onStatusUpdate Callback to update OAuthStatus during the flow
- * @param onDone Callback when login completes successfully
- * @param state The state parameter for OAuth flow (used for CSRF protection)
+ * Start GitHub Device Flow for CLI login. Device Flow does not require a
+ * Client Secret, so a source checkout can work without embedding credentials.
  */
 export async function startGitHubOAuthFlow(
   onStatusUpdate: (status: OAuthStatus) => void,
-  onDone: () => void,
-  state: string,
-  codeVerifier: string,
+  onLoginSuccess: () => void,
 ): Promise<void> {
   try {
     logEvent('tengu_oauth_github_flow_start', {})
+    const device = await requestGitHubDeviceCode()
 
-    const authUrl = buildGitHubAuthUrl(codeVerifier, state)
-
-    // Auto-open browser for GitHub OAuth flow (same behavior as Claude.ai login)
     try {
-      await openBrowser(authUrl)
+      await openBrowser(device.verificationUri)
     } catch (e) {
-      logForDebugging('GitHub OAuth: Failed to open browser automatically', {
+      logForDebugging('GitHub Device Flow: Failed to open browser automatically', {
         error: (e as Error)?.message ?? 'unknown',
       })
     }
 
     onStatusUpdate({
       state: 'waiting_for_login',
-      url: authUrl,
+      url: device.verificationUri,
+      userCode: device.userCode,
+      deviceFlow: true,
     })
 
-    // The code exchange happens in ConsoleOAuthFlow via handleManualAuthCodeInput
-    // This is handled by the callback function
+    const githubAccessToken = await pollGitHubDeviceCode(
+      device.deviceCode,
+      device.interval,
+      device.expiresIn,
+    )
+    const result = await githubOAuthFlowWithAccessToken(githubAccessToken)
+    if (!result) throw new Error('Failed to exchange GitHub device authorization for an internal token')
+
+    saveGitHubLoginSession(githubAccessToken, result.user)
+
+    logEvent('tengu_oauth_github_success', { loginMethod: 'github' })
+    onStatusUpdate({ state: 'success' })
+    onLoginSuccess()
   } catch (error) {
-    logError(error as Error, 'GitHub OAuth flow failed')
+    logError(error as Error, 'GitHub Device Flow failed')
     logEvent('tengu_oauth_github_error', {
       error: (error as Error).message as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
     })
@@ -81,7 +85,6 @@ export async function startGitHubOAuthFlow(
  */
 export async function handleGitHubManualCode(
   authorizationCode: string,
-  state: string,
   codeVerifier: string,
   onStatusUpdate: (status: OAuthStatus) => void,
   onLoginSuccess: () => void,
@@ -89,39 +92,24 @@ export async function handleGitHubManualCode(
   try {
     logEvent('tengu_oauth_github_manual_entry', {})
 
-    // Exchange GitHub code for Anthropic OAuth token
-    onStatusUpdate({ state: 'creating_api_key' })
+    // Validate GitHub code and persist a local GitHub login session
 
     const result = await githubOAuthExchangeCode(authorizationCode, codeVerifier)
 
     if (!result) {
-      throw new Error('Failed to exchange GitHub code for Anthropic token')
+      throw new Error('Failed to complete GitHub login.')
     }
 
-    // Install the OAuth tokens
-    await installOAuthTokens({
-      accessToken: result.accessToken,
-      refreshToken: '', // GitHub OAuth doesn't provide refresh token for internal flows
-      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
-      scopes: ['user:inference', 'user:profile', 'user:sessions:claude_code', 'user:mcp_servers', 'user:file_upload'],
-      subscriptionType: 'internal',
-      rateLimitTier: null, // Internal users have unlimited access
-      profile: undefined,
-      tokenAccount: result.user ? {
-        uuid: '',
-        emailAddress: result.user.email,
-        organizationUuid: '',
-      } : undefined,
-    })
+    if (!result.user) {
+      throw new Error('GitHub login did not return a user profile.')
+    }
+    saveGitHubLoginSession(result.accessToken, result.user)
 
     logEvent('tengu_oauth_github_success', {
       loginMethod: 'github'
     })
 
-    onStatusUpdate({
-      state: 'success',
-      token: result.accessToken
-    })
+    onStatusUpdate({ state: 'success' })
 
     onLoginSuccess()
   } catch (error) {
