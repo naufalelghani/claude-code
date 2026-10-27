@@ -83,7 +83,7 @@ export function normalizeClaudeModelFamily(
   if (
     /^(?:haiku|haiku3|haiku35|haiku45|haiku55)$/.test(model) ||
     model.includes('claude-haiku-') ||
-    model.includes('claude-3-haiku')
+    /claude-3-(?:5-)?haiku/.test(model)
   ) {
     return 'haiku'
   }
