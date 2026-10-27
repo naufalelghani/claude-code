@@ -92,13 +92,15 @@ Use Anthropic's first-party API directly.
 
 ### OpenAI Codex
 
-Use OpenAI's Codex models for code generation. Requires a Codex subscription.
+Sign in with a ChatGPT account that has Codex access. The Codex picker uses the same catalog as the request adapter, so selected model IDs are sent through without silently falling back to an older model.
 
 | Model | ID |
 |---|---|
-| GPT-5.3 Codex (recommended) | `gpt-5.3-codex` |
-| GPT-5.4 | `gpt-5.4` |
-| GPT-5.4 Mini | `gpt-5.4-mini` |
+| GPT-6 Luna | `gpt-6-luna` |
+| GPT-5.6 Terra | `gpt-5.6-terra` |
+| GPT-5.6 Luna | `gpt-5.6-luna` |
+
+Choose **OpenAI Codex account** from `/login`. Successful Codex login is saved as the active provider preference. To force the provider using an environment variable instead:
 
 ```bash
 export CLAUDE_CODE_USE_OPENAI=1
