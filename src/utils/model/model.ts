@@ -23,7 +23,11 @@ import {
 } from '../context.js'
 import { isEnvTruthy } from '../envUtils.js'
 import { getModelStrings, resolveOverriddenModel } from './modelStrings.js'
-import { formatModelPricing, getOpus46CostTier } from '../modelCost.js'
+import {
+  COST_OPUS_55_FAST,
+  formatModelPricing,
+  getOpus46CostTier,
+} from '../modelCost.js'
 import { getSettings_DEPRECATED } from '../settings/settings.js'
 import type { PermissionMode } from '../permissions/PermissionMode.js'
 import { getAPIProvider } from './providers.js'
@@ -43,10 +47,14 @@ export function getSmallFastModel(): ModelName {
 
 export function isNonCustomOpusModel(model: ModelName): boolean {
   return (
-    model === getModelStrings().opus40 ||
-    model === getModelStrings().opus41 ||
+    model === getModelStrings().opus55 ||
+    model === getModelStrings().opus5 ||
+    model === getModelStrings().opus48 ||
+    model === getModelStrings().opus47 ||
+    model === getModelStrings().opus46 ||
     model === getModelStrings().opus45 ||
-    model === getModelStrings().opus46
+    model === getModelStrings().opus41 ||
+    model === getModelStrings().opus40
   )
 }
 
@@ -62,6 +70,54 @@ export function isNonCustomOpusModel(model: ModelName): boolean {
  * 3. ANTHROPIC_MODEL environment variable
  * 4. Settings (from user's saved settings)
  */
+/**
+ * Normalize saved selections to one of the four supported Claude model families.
+ * Older model IDs and legacy aliases resolve to their current family instead of
+ * being re-added to the picker as extra choices.
+ */
+export function normalizeModelSettingForPicker(
+  setting: string | null,
+): string | null {
+  if (setting === null) return null
+
+  const trimmed = setting.trim()
+  const lower = trimmed.toLowerCase().replace(/\[1m\]$/i, '').trim()
+
+  if (/^(?:fable|fable5|fable51|mythos|mythos5|mythos51)$/.test(lower)) {
+    return 'fable'
+  }
+  if (
+    /^(?:opus|opus3|opus40|opus41|opus45|opus46|opus47|opus48|opus5|opus55|best|opusplan)$/.test(
+      lower,
+    )
+  ) {
+    return 'opus'
+  }
+  if (
+    /^(?:sonnet|sonnet35|sonnet37|sonnet40|sonnet45|sonnet46|sonnet5|sonnet55)$/.test(
+      lower,
+    )
+  ) {
+    return 'sonnet'
+  }
+  if (/^(?:haiku|haiku3|haiku35|haiku45|haiku55)$/.test(lower)) {
+    return 'haiku'
+  }
+
+  const canonical = getCanonicalName(lower).toLowerCase()
+  if (/^claude-(?:fable-|mythos-)/.test(canonical)) return 'fable'
+  if (/^claude-(?:opus-|3-opus)/.test(canonical)) return 'opus'
+  if (/^claude-(?:sonnet-|3-(?:5-|7-)?sonnet)/.test(canonical)) {
+    return 'sonnet'
+  }
+  if (/^claude-(?:haiku-|3-(?:5-)?haiku)/.test(canonical)) {
+    return 'haiku'
+  }
+
+  // Preserve non-Claude custom deployments and the separate Codex model path.
+  return trimmed
+}
+
 export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
   let specifiedModel: ModelSetting | undefined
 
@@ -73,9 +129,17 @@ export function getUserSpecifiedModelSetting(): ModelSetting | undefined {
     specifiedModel = process.env.ANTHROPIC_MODEL || settings.model || undefined
   }
 
-  // Ignore the user-specified model if it's not in the availableModels allowlist.
+  // Check the existing value first so a saved allowlist cannot be bypassed by
+  // rewriting an old model ID to its current family alias.
   if (specifiedModel && !isModelAllowed(specifiedModel)) {
     return undefined
+  }
+
+  if (specifiedModel) {
+    specifiedModel = normalizeModelSettingForPicker(specifiedModel) as ModelSetting
+    if (!isModelAllowed(specifiedModel)) {
+      return undefined
+    }
   }
 
   return specifiedModel
@@ -188,22 +252,19 @@ export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
     return getModelStrings().gpt53codex
   }
 
-  // Ants default to defaultModel from flag config, or Opus 1M if not configured
+  // Keep the default on the current Opus model for Ant builds as well.
   if (process.env.USER_TYPE === 'ant') {
-    return (
-      getAntModelOverrideConfig()?.defaultModel ??
-      getDefaultOpusModel() + '[1m]'
-    )
+    return getDefaultOpusModel()
   }
 
-  // Max users get Opus as default
+  // Max users get the current Opus model (1M context is part of the model).
   if (isMaxSubscriber()) {
-    return getDefaultOpusModel() + (isOpus1mMergeEnabled() ? '[1m]' : '')
+    return getDefaultOpusModel()
   }
 
-  // Team Premium gets Opus (same as Max)
+  // Team Premium gets Opus (same as Max).
   if (isTeamPremiumSubscriber()) {
-    return getDefaultOpusModel() + (isOpus1mMergeEnabled() ? '[1m]' : '')
+    return getDefaultOpusModel()
   }
 
   // PAYG (1P and 3P), Enterprise, Team Standard, and Pro get Sonnet as default
@@ -398,10 +459,11 @@ export function getClaudeAiUserDefaultModelDescription(
     return 'GPT-5.3 Codex · Optimized for code generation and understanding'
   }
   if (isMaxSubscriber() || isTeamPremiumSubscriber()) {
-    if (isOpus1mMergeEnabled()) {
-      return `Opus 5.5 with 1M context · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
-    }
-    return `Opus 5.5 · Most capable for complex work${fastMode ? getOpus46PricingSuffix(true) : ''}`
+    const fastPricing =
+      fastMode && getAPIProvider() === 'firstParty'
+        ? ` · ${formatModelPricing(COST_OPUS_55_FAST)}`
+        : ''
+    return `Opus 5.5 · Most capable for complex work${fastPricing}`
   }
   return 'Sonnet 5.5 · Best for everyday tasks'
 }
@@ -469,6 +531,14 @@ export function getPublicModelDisplayName(model: ModelName): string | null {
   }
 
   switch (model) {
+    case getModelStrings().fable51:
+      return 'Fable 5.1'
+    case getModelStrings().opus55:
+      return 'Opus 5.5'
+    case getModelStrings().sonnet55:
+      return 'Sonnet 5.5'
+    case getModelStrings().haiku55:
+      return 'Haiku 5.5'
     case getModelStrings().opus46:
       return 'Opus 4.6'
     case getModelStrings().opus46 + '[1m]':
@@ -603,6 +673,21 @@ export function parseUserSpecifiedModel(
   const modelString = has1mTag
     ? normalizedModel.replace(/\[1m]$/i, '').trim()
     : normalizedModel
+
+  // Treat existing full model IDs and legacy aliases as a selection of one
+  // of the four current families. The selected family alias resolves to the
+  // provider-specific current model ID below.
+  const normalizedSetting = normalizeModelSettingForPicker(modelInputTrimmed)
+  if (
+    normalizedSetting !== null &&
+    normalizedSetting !== modelString &&
+    (normalizedSetting === 'fable' ||
+      normalizedSetting === 'opus' ||
+      normalizedSetting === 'sonnet' ||
+      normalizedSetting === 'haiku')
+  ) {
+    return parseUserSpecifiedModel(normalizedSetting as ModelAlias)
+  }
 
   if (isModelAlias(modelString)) {
     switch (modelString) {
