@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { filterCoordinatorModeTools } from './coordinatorMode.js'
+import { AGENT_TOOL_NAME } from '../tools/AgentTool/constants.js'
 import { getCoordinatorAgents } from './workerAgent.js'
 
 describe('Coordinator Mode workers', () => {
@@ -10,6 +11,7 @@ describe('Coordinator Mode workers', () => {
     expect(agents[0]?.agentType).toBe('worker')
     expect(agents[0]?.source).toBe('built-in')
     expect(agents[0]?.tools).toEqual(['*'])
+    expect(agents[0]?.disallowedTools).toContain(AGENT_TOOL_NAME)
   })
 
   test('adds coordinator-specific execution guidance to the worker prompt', () => {
