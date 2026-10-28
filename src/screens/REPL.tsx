@@ -822,10 +822,13 @@ export function REPL({
     enabled: !isRemoteSession
   });
   const mergedTools = useMergedTools(combinedInitialTools, mcp.tools, toolPermissionContext);
-  const coordinatorScopedTools =
-    !mainThreadAgentDefinition && isCoordinatorModeForMainLoop()
-      ? filterCoordinatorModeTools(mergedTools)
-      : mergedTools
+  const coordinatorScopedTools = useMemo(
+    () =>
+      !mainThreadAgentDefinition && isCoordinatorModeForMainLoop()
+        ? filterCoordinatorModeTools(mergedTools)
+        : mergedTools,
+    [mainThreadAgentDefinition, mergedTools],
+  )
 
   // Apply agent tool restrictions if mainThreadAgentDefinition is set
   const {
