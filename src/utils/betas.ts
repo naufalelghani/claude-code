@@ -22,8 +22,8 @@ import {
   WEB_SEARCH_BETA_HEADER,
 } from '../constants/betas.js'
 import { OAUTH_BETA_HEADER } from '../constants/oauth.js'
-import { isClaudeAISubscriber, isCodexSubscriber } from './auth.js'
 import { isCodexModel } from '../services/api/codex-models.js'
+import { isClaudeAISubscriber, isCodexSubscriber } from './auth.js'
 import { has1mContext } from './context.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
