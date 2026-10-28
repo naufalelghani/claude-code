@@ -40,6 +40,7 @@ Then run `free-code` and use the `/login` command to authenticate with your pref
 - [Requirements](#requirements)
 - [Build](#build)
 - [Usage](#usage)
+- [Multi-Agent Modes](#multi-agent-modes)
 - [Experimental Features](#experimental-features)
 - [Project Structure](#project-structure)
 - [Tech Stack](#tech-stack)
@@ -229,6 +230,72 @@ npm test
 ./cli /login
 ```
 
+## Multi-Agent Modes
+
+This fork has two separate multi-agent workflows. They use different activation
+switches and should be tested independently. Both are experimental; use the
+development full build while evaluating them.
+
+Build it once from the repository root:
+
+```bash
+bun run build:dev:full
+```
+
+### Coordinator Mode (fork-specific)
+
+Coordinator Mode is this fork's coordinator/worker workflow. The main session
+orchestrates tasks and spawns workers through the Agent tool. Workers are not
+allowed to spawn nested workers, and Coordinator Mode limits concurrent local
+workers to three.
+
+Activate it for one session:
+
+```bash
+env -u CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS \
+  CLAUDE_CODE_COORDINATOR_MODE=1 \
+  ./cli-dev
+```
+
+`CLAUDE_CODE_COORDINATOR_MODE` is a fork-specific runtime switch, not a
+documented upstream Claude Code environment variable. The compile-time
+`COORDINATOR_MODE` feature must also be present in the build; setting the
+environment variable alone does not add it to a standard build.
+
+### Agent Teams (experimental)
+
+Agent Teams uses named teammates, a shared task list, and inter-agent messaging.
+It follows the experimental Agent Teams opt-in used by Claude Code and also
+respects the runtime feature-gate kill switch.
+
+Activate it for one session:
+
+```bash
+env -u CLAUDE_CODE_COORDINATOR_MODE \
+  CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \
+  ./cli-dev
+```
+
+Use TeamCreate/TeamDelete to manage a team, Agent to create a teammate, and
+the task and messaging tools to coordinate work. In this fork, identical
+teammate spawn requests are rejected instead of silently creating a suffixed
+duplicate. Different work may still use the same requested name after the
+first spawn is no longer in flight.
+
+For predictable testing, enable one mode at a time. These commands only set
+environment variables for the launched process; they do not persist settings
+for future terminals. To make a mode the default, configure its environment
+variable in your shell startup file or in the CLI's settings environment map.
+Do not enable Coordinator Mode in every session unless you want all sessions
+to start as a coordinator.
+
+### Multi-Agent Runtime Variables
+
+| Variable | Purpose |
+|---|---|
+| `CLAUDE_CODE_COORDINATOR_MODE=1` | Activates this fork's Coordinator Mode at runtime; requires a build with `COORDINATOR_MODE`. |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | Opts in to Agent Teams; still subject to the runtime feature-gate kill switch. |
+
 ### Environment Variables Reference
 
 | Variable | Purpose |
@@ -244,6 +311,8 @@ npm test
 | `CLAUDE_CODE_OAUTH_TOKEN` | OAuth token via env |
 | `CLAUDE_CODE_USE_OPENAI` | Force the OpenAI Codex provider |
 | `CLAUDE_CODE_API_KEY_HELPER_TTL_MS` | API key helper cache TTL |
+| `CLAUDE_CODE_COORDINATOR_MODE` | Enable this fork's Coordinator Mode (requires the `COORDINATOR_MODE` build feature) |
+| `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` | Opt in to experimental Agent Teams (subject to runtime feature gate) |
 
 ---
 
