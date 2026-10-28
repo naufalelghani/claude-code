@@ -132,9 +132,10 @@ explicitly called out as default-on.
   Enables Auto Mode permission selection and transcript-based tool classification.
   Included in `bun run build:dev:full`. For external builds, when GrowthBook
   has no explicit Auto Mode setting, the default is enabled for supported
-  first-party Claude 4+ model families. An explicit
+  first-party Claude 4+ families and authenticated models in the Codex catalog.
+  The Codex adapter preserves forced classifier tool calls. An explicit
   `tengu_auto_mode_config.enabled = 'disabled'` remains a runtime circuit breaker;
-  Bedrock, Vertex, Foundry, and other non-first-party providers remain unsupported.
+  Bedrock, Vertex, Foundry, and unvalidated OpenAI-compatible endpoints remain unsupported.
 - `UNATTENDED_RETRY`
   Enables unattended retry behavior in API retry flows.
 
