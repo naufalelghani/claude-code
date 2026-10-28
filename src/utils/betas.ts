@@ -192,7 +192,7 @@ export function modelSupportsAutoMode(model: string): boolean {
     // models. Keep this restricted to known Claude model families; third-party
     // providers were rejected above until their classifier contract is verified.
     const externalModel = m.match(
-      /^claude-(opus|sonnet|haiku|fable|mythos)-(\\d+)(?:-|$)/,
+      /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-|$)/,
     )
     return externalModel !== null && Number(externalModel[2]) >= 4
   }
