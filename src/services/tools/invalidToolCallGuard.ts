@@ -3,6 +3,8 @@
  * request. It identifies input-validation failures only, not ordinary tool
  * failures, so callers can stop a loop without suppressing legitimate retries.
  */
+const MAX_INVALID_TOOL_CALLS_PER_TOOL = 3
+const MAX_INVALID_TOOL_CALLS_PER_REQUEST = 8
 export function getInputValidationToolUseIds(message: unknown): string[] {
   if (typeof message !== 'object' || message === null) return []
   const envelope = message as Record<string, unknown>
@@ -47,16 +49,29 @@ function stableSerialize(value: unknown): string {
 }
 
 /**
- * Record a tool call that failed validation. Returns true when the same tool
- * name and canonicalized input have already failed validation in this request.
+ * Record a tool call that failed input validation.
+ *
+ * Stop immediately when the exact same call fails twice, and also cap distinct
+ * malformed calls so a model cannot evade the guard by changing empty or
+ * otherwise-invalid arguments on every retry. This tracks validation failures
+ * only; ordinary tool errors and permission denials are intentionally excluded.
  */
 export function recordInvalidToolCall(
   failedSignatures: Set<string>,
   toolName: string,
   input: unknown,
 ): boolean {
-  const signature = `${toolName}\u0000${stableSerialize(input)}`
+  const toolPrefix = `${toolName}\u0000`
+  const signature = `${toolPrefix}${stableSerialize(input)}`
   if (failedSignatures.has(signature)) return true
+
+  const previousFailuresForTool = [...failedSignatures].filter(signature =>
+    signature.startsWith(toolPrefix),
+  ).length
   failedSignatures.add(signature)
-  return false
+
+  return (
+    previousFailuresForTool + 1 >= MAX_INVALID_TOOL_CALLS_PER_TOOL ||
+    failedSignatures.size >= MAX_INVALID_TOOL_CALLS_PER_REQUEST
+  )
 }
