@@ -15,10 +15,18 @@ describe('invalidToolCallGuard', () => {
     expect(
       recordInvalidToolCall(failed, 'TaskUpdate', { taskId: '1', status: 'pending' }),
     ).toBe(true)
-    expect(recordInvalidToolCall(failed, 'TaskUpdate', { taskId: '2' })).toBe(
+    expect(recordInvalidToolCall(failed, 'TaskList', { taskId: '2' })).toBe(
       false,
     )
     expect(recordInvalidToolCall(failed, 'Agent', {})).toBe(false)
+  })
+
+  test('stops after repeated validation failures with different malformed inputs', () => {
+    const failed = new Set<string>()
+
+    expect(recordInvalidToolCall(failed, 'Read', {})).toBe(false)
+    expect(recordInvalidToolCall(failed, 'Read', { file_path: '' })).toBe(false)
+    expect(recordInvalidToolCall(failed, 'Read', { path: '' })).toBe(true)
   })
 
   test('extracts only errored tool results that identify input-validation failures', () => {
