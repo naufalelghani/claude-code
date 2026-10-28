@@ -1,6 +1,6 @@
 import type { BuiltInAgentDefinition } from '../tools/AgentTool/loadAgentsDir.js'
-import { AGENT_TOOL_NAME } from '../tools/AgentTool/constants.js'
 import { GENERAL_PURPOSE_AGENT } from '../tools/AgentTool/built-in/generalPurposeAgent.js'
+import { AGENT_TOOL_NAME } from '../tools/AgentTool/constants.js'
 
 const COORDINATOR_WORKER_GUIDANCE = `## Coordinator worker rules
 
