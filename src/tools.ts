@@ -276,31 +276,25 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
     // below which also hides REPL_ONLY_TOOLS when REPL is enabled.
     if (isReplModeEnabled() && REPLTool) {
       const replSimple: Tool[] = [REPLTool]
-      const coordinatorModeActive =
+      if (
         feature('COORDINATOR_MODE') &&
         coordinatorModeModule?.isCoordinatorMode()
-      if (coordinatorModeActive) {
-        // The coordinator needs the Agent tool itself; the REPL tool and raw
-        // file/shell tools are excluded by the coordinator's orchestration-only
-        // allowlist below.
-        replSimple.push(AgentTool, TaskStopTool, getSendMessageTool())
+      ) {
+        replSimple.push(TaskStopTool, getSendMessageTool())
       }
-      const visibleTools = coordinatorModeActive
-        ? coordinatorModeModule!.filterCoordinatorModeTools(replSimple)
-        : replSimple
-      return filterToolsByDenyRules(visibleTools, permissionContext)
+      return filterToolsByDenyRules(replSimple, permissionContext)
     }
     const simpleTools: Tool[] = [BashTool, FileReadTool, FileEditTool]
-    const coordinatorModeActive =
+    // When coordinator mode is also active, include AgentTool and TaskStopTool
+    // so the coordinator gets Task+TaskStop (via useMergedTools filtering) and
+    // workers get Bash/Read/Edit (via filterToolsForAgent filtering).
+    if (
       feature('COORDINATOR_MODE') &&
       coordinatorModeModule?.isCoordinatorMode()
-    if (coordinatorModeActive) {
+    ) {
       simpleTools.push(AgentTool, TaskStopTool, getSendMessageTool())
     }
-    const visibleTools = coordinatorModeActive
-      ? coordinatorModeModule!.filterCoordinatorModeTools(simpleTools)
-      : simpleTools
-    return filterToolsByDenyRules(visibleTools, permissionContext)
+    return filterToolsByDenyRules(simpleTools, permissionContext)
   }
 
   // Get all base tools and filter out special tools that get added conditionally
@@ -314,16 +308,6 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
 
   // Filter out tools that are denied by the deny rules
   let allowedTools = filterToolsByDenyRules(tools, permissionContext)
-
-  // Coordinator mode is deliberately orchestration-only. Never expose normal
-  // file, shell, or other direct-action tools to the main coordinator; those
-  // belong to its worker agents.
-  if (
-    feature('COORDINATOR_MODE') &&
-    coordinatorModeModule?.isCoordinatorMode()
-  ) {
-    allowedTools = coordinatorModeModule.filterCoordinatorModeTools(allowedTools)
-  }
 
   // When REPL mode is enabled, hide primitive tools from direct use.
   // They're still accessible inside REPL via the VM context.
