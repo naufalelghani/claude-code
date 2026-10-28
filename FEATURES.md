@@ -88,6 +88,8 @@ explicitly called out as default-on.
   Enables cached microcompact state through query and API flows.
 - `COMPACTION_REMINDERS`
   Enables reminder copy around compaction and attachment flows.
+- `COORDINATOR_MODE`
+  Enables the experimental coordinator/worker workflow. Runtime activation additionally requires `CLAUDE_CODE_COORDINATOR_MODE=1`.
 - `EXTRACT_MEMORIES`
   Enables post-query memory extraction hooks.
 - `PROMPT_CACHE_BREAK_DETECTION`
@@ -259,8 +261,6 @@ than a single wrapper or asset.
   Missing `src/environment-runner/main.js`.
 - `CONTEXT_COLLAPSE`
   Missing `src/tools/CtxInspectTool/CtxInspectTool.js`.
-- `COORDINATOR_MODE`
-  Missing `src/coordinator/workerAgent.js`.
 - `DAEMON`
   Missing `src/daemon/workerRegistry.js`.
 - `DIRECT_CONNECT`
