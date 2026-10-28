@@ -726,7 +726,7 @@ async function checkPermissionsAndCallTool(
           content: [
             {
               type: 'tool_result',
-              content: `<tool_use_error>${validationErrorContent}</tool_use_error>`,
+              content: `<tool_use_error>InputValidationError: ${validationErrorContent}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUseID,
             },
