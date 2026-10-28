@@ -22,7 +22,8 @@ import {
   WEB_SEARCH_BETA_HEADER,
 } from '../constants/betas.js'
 import { OAUTH_BETA_HEADER } from '../constants/oauth.js'
-import { isClaudeAISubscriber } from './auth.js'
+import { isClaudeAISubscriber, isCodexSubscriber } from './auth.js'
+import { isCodexModel } from '../services/api/codex-models.js'
 import { has1mContext } from './context.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
@@ -160,10 +161,23 @@ export function modelSupportsStructuredOutputs(model: string): boolean {
 export function modelSupportsAutoMode(model: string): boolean {
   if (feature('TRANSCRIPT_CLASSIFIER')) {
     const m = getCanonicalName(model)
-    // External: firstParty-only at launch (PI probes not wired for
-    // Bedrock/Vertex/Foundry yet). Checked before allowModels so the GB
-    // override can't enable auto mode on unsupported providers.
-    if (process.env.USER_TYPE !== 'ant' && getAPIProvider() !== 'firstParty') {
+    const provider = getAPIProvider()
+    // The Codex OAuth adapter translates Anthropic-shaped requests to the
+    // Responses API, including classifier tool schemas. Only enable this path
+    // for models in the supported Codex catalog and an active Codex session.
+    const codexModelSupported =
+      process.env.USER_TYPE !== 'ant' &&
+      provider === 'openai' &&
+      isCodexSubscriber() &&
+      isCodexModel(model)
+    // External builds currently support first-party Claude models and the
+    // explicitly translated Codex catalog. Other third-party providers have
+    // not been validated for Auto Mode.
+    if (
+      process.env.USER_TYPE !== 'ant' &&
+      provider !== 'firstParty' &&
+      !codexModelSupported
+    ) {
       return false
     }
     // GrowthBook override: tengu_auto_mode_config.allowModels force-enables
@@ -179,6 +193,9 @@ export function modelSupportsAutoMode(model: string): boolean {
         am => am.toLowerCase() === rawLower || am.toLowerCase() === m,
       )
     ) {
+      return true
+    }
+    if (codexModelSupported) {
       return true
     }
     if (process.env.USER_TYPE === 'ant') {
