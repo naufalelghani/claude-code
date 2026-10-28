@@ -563,6 +563,7 @@ async function* queryLoop(
     // loop-exit signal. If false after streaming, we're done (modulo stop-hook retry).
     const toolUseBlocks: ToolUseBlock[] = []
     let needsFollowUp = false
+    let repeatedInvalidToolCall = false
 
     queryCheckpoint('query_setup_start')
     const useStreamingToolExecution = config.gates.streamingToolExecution
@@ -857,6 +858,24 @@ async function* queryLoop(
             ) {
               for (const result of streamingToolExecutor.getCompletedResults()) {
                 if (result.message) {
+                  for (const toolUseId of getInputValidationToolUseIds(
+                    result.message,
+                  )) {
+                    const failedToolUse = toolUseBlocks.find(
+                      block => block.id === toolUseId,
+                    )
+                    if (
+                      failedToolUse &&
+                      recordInvalidToolCall(
+                        invalidToolCallSignatures,
+                        failedToolUse.name,
+                        failedToolUse.input,
+                      )
+                    ) {
+                      repeatedInvalidToolCall = true
+                    }
+                  }
+
                   yield result.message
                   toolResults.push(
                     ...normalizeMessagesForAPI(
@@ -1387,7 +1406,6 @@ async function* queryLoop(
     const toolUpdates = streamingToolExecutor
       ? streamingToolExecutor.getRemainingResults()
       : runTools(toolUseBlocks, assistantMessages, canUseTool, toolUseContext)
-    let repeatedInvalidToolCall = false
 
     for await (const update of toolUpdates) {
       if (update.message) {
