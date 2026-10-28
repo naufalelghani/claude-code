@@ -69,6 +69,51 @@ describe('withTeammateSpawnDeduplication', () => {
     expect(spawnCalls).toBe(1)
   })
 
+  test('blocks concurrent same-name spawns even if their prompts differ', async () => {
+    let releaseRosterRead: (() => void) | undefined
+    const rosterRead = new Promise<void>(resolve => {
+      releaseRosterRead = resolve
+    })
+    let spawnCalls = 0
+
+    const first = withTeammateSpawnDeduplication(
+      {
+        teamName: 'smoke-team-same-name',
+        name: 'config-reader',
+        prompt: 'Read workerAgent.ts',
+      },
+      async () => {
+        await rosterRead
+        return []
+      },
+      async () => {
+        spawnCalls++
+        return 'spawned'
+      },
+    )
+
+    await Promise.resolve()
+
+    await expect(
+      withTeammateSpawnDeduplication(
+        {
+          teamName: 'smoke-team-same-name',
+          name: 'config-reader',
+          prompt: 'Read coordinatorMode.ts',
+        },
+        async () => [],
+        async () => {
+          spawnCalls++
+          return 'duplicate'
+        },
+      ),
+    ).rejects.toThrow('another spawn with this name is already in progress')
+
+    releaseRosterRead?.()
+    await expect(first).resolves.toBe('spawned')
+    expect(spawnCalls).toBe(1)
+  })
+
   test('allows the same name for a different prompt', async () => {
     let spawnCalls = 0
 
