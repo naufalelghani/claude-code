@@ -29,6 +29,29 @@ describe('invalidToolCallGuard', () => {
     expect(recordInvalidToolCall(failed, 'Read', { path: '' })).toBe(true)
   })
 
+  test('detects validation errors returned as structured text blocks', () => {
+    expect(
+      getInputValidationToolUseIds({
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'toolu_structured',
+              is_error: true,
+              content: [
+                {
+                  type: 'text',
+                  text: 'InputValidationError: missing file_path',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual(['toolu_structured'])
+  })
+
   test('extracts only errored tool results that identify input-validation failures', () => {
     expect(
       getInputValidationToolUseIds({
