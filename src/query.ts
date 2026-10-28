@@ -94,6 +94,10 @@ import { executeStopFailureHooks } from './utils/hooks.js'
 import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
+import {
+  getInputValidationToolUseIds,
+  recordInvalidToolCall,
+} from './services/tools/invalidToolCallGuard.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
 import { applyToolResultBudget } from './utils/toolResultStorage.js'
@@ -293,6 +297,9 @@ async function* queryLoop(
   // Snapshot immutable env/statsig/session state once at entry. See QueryConfig
   // for what's included and why feature() gates are intentionally excluded.
   const config = buildQueryConfig()
+  // Preserve validation failures across model follow-up turns. A repeated
+  // identical malformed call should end the turn instead of creating a loop.
+  const invalidToolCallSignatures = new Set<string>()
 
   // Fired once per user turn — the prompt is invariant across loop iterations,
   // so per-iteration firing would ask sideQuery the same question N times.
@@ -556,6 +563,7 @@ async function* queryLoop(
     // loop-exit signal. If false after streaming, we're done (modulo stop-hook retry).
     const toolUseBlocks: ToolUseBlock[] = []
     let needsFollowUp = false
+    let repeatedInvalidToolCall = false
 
     queryCheckpoint('query_setup_start')
     const useStreamingToolExecution = config.gates.streamingToolExecution
@@ -850,6 +858,24 @@ async function* queryLoop(
             ) {
               for (const result of streamingToolExecutor.getCompletedResults()) {
                 if (result.message) {
+                  for (const toolUseId of getInputValidationToolUseIds(
+                    result.message,
+                  )) {
+                    const failedToolUse = toolUseBlocks.find(
+                      block => block.id === toolUseId,
+                    )
+                    if (
+                      failedToolUse &&
+                      recordInvalidToolCall(
+                        invalidToolCallSignatures,
+                        failedToolUse.name,
+                        failedToolUse.input,
+                      )
+                    ) {
+                      repeatedInvalidToolCall = true
+                    }
+                  }
+
                   yield result.message
                   toolResults.push(
                     ...normalizeMessagesForAPI(
@@ -1383,6 +1409,22 @@ async function* queryLoop(
 
     for await (const update of toolUpdates) {
       if (update.message) {
+        for (const toolUseId of getInputValidationToolUseIds(update.message)) {
+          const failedToolUse = toolUseBlocks.find(
+            block => block.id === toolUseId,
+          )
+          if (
+            failedToolUse &&
+            recordInvalidToolCall(
+              invalidToolCallSignatures,
+              failedToolUse.name,
+              failedToolUse.input,
+            )
+          ) {
+            repeatedInvalidToolCall = true
+          }
+        }
+
         yield update.message
 
         if (
@@ -1407,6 +1449,14 @@ async function* queryLoop(
       }
     }
     queryCheckpoint('query_tool_execution_end')
+
+    if (repeatedInvalidToolCall) {
+      yield createSystemMessage(
+        'Stopped this turn because the same tool call failed input validation more than once. The repeated call was not executed. Correct the arguments or ask the user for missing information before retrying.',
+        'warning',
+      )
+      return { reason: 'completed' }
+    }
 
     // Generate tool use summary after tool batch completes — passed to next recursive call
     let nextPendingToolUseSummary:

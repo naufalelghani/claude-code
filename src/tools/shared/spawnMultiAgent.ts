@@ -64,6 +64,7 @@ import {
   sendCommandToPane,
 } from '../../utils/swarm/teammateLayoutManager.js'
 import { getHardcodedTeammateModelFallback } from '../../utils/swarm/teammateModel.js'
+import { withTeammateSpawnDeduplication } from '../../utils/swarm/teammateSpawnGuard.js'
 import { registerTask } from '../../utils/task/framework.js'
 import { writeToMailbox } from '../../utils/teammateMailbox.js'
 import type { CustomAgentDefinition } from '../AgentTool/loadAgentsDir.js'
@@ -1089,5 +1090,22 @@ export async function spawnTeammate(
   config: SpawnTeammateConfig,
   context: ToolUseContext,
 ): Promise<{ data: SpawnOutput }> {
-  return handleSpawn(config, context)
+  const teamName =
+    config.team_name || context.getAppState().teamContext?.teamName
+
+  // Preserve the normal validation error when the required spawn fields are
+  // absent. The spawn handlers own these checks and report their exact errors.
+  if (!teamName || !config.name || !config.prompt) {
+    return handleSpawn(config, context)
+  }
+
+  return withTeammateSpawnDeduplication(
+    {
+      teamName,
+      name: config.name,
+      prompt: config.prompt,
+    },
+    async () => (await readTeamFileAsync(teamName))?.members ?? [],
+    () => handleSpawn(config, context),
+  )
 }

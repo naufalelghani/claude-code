@@ -117,6 +117,16 @@ const getCoordinatorUserContext: (mcpClients: ReadonlyArray<{
 }>, scratchpadDir?: string) => {
   [k: string]: string;
 } = feature('COORDINATOR_MODE') ? require('../coordinator/coordinatorMode.js').getCoordinatorUserContext : () => ({});
+// Coordinator restrictions apply only to the main coordinator loop. Worker tools
+// are assembled independently in AgentTool and must retain their normal allowlist.
+const filterCoordinatorModeTools: <T extends { name: string }>(
+  tools: readonly T[],
+) => T[] = feature('COORDINATOR_MODE')
+  ? require('../coordinator/coordinatorMode.js').filterCoordinatorModeTools
+  : tools => [...tools]
+const isCoordinatorModeForMainLoop: () => boolean = feature('COORDINATOR_MODE')
+  ? require('../coordinator/coordinatorMode.js').isCoordinatorMode
+  : () => false
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import useCanUseTool from '../hooks/useCanUseTool.js';
 import type { ToolPermissionContext, Tool } from '../Tool.js';
@@ -812,6 +822,13 @@ export function REPL({
     enabled: !isRemoteSession
   });
   const mergedTools = useMergedTools(combinedInitialTools, mcp.tools, toolPermissionContext);
+  const coordinatorScopedTools = useMemo(
+    () =>
+      !mainThreadAgentDefinition && isCoordinatorModeForMainLoop()
+        ? filterCoordinatorModeTools(mergedTools)
+        : mergedTools,
+    [mainThreadAgentDefinition, mergedTools],
+  )
 
   // Apply agent tool restrictions if mainThreadAgentDefinition is set
   const {
@@ -820,16 +837,16 @@ export function REPL({
   } = useMemo(() => {
     if (!mainThreadAgentDefinition) {
       return {
-        tools: mergedTools,
+        tools: coordinatorScopedTools,
         allowedAgentTypes: undefined as string[] | undefined
       };
     }
-    const resolved = resolveAgentTools(mainThreadAgentDefinition, mergedTools, false, true);
+    const resolved = resolveAgentTools(mainThreadAgentDefinition, coordinatorScopedTools, false, true);
     return {
       tools: resolved.resolvedTools,
       allowedAgentTypes: resolved.allowedAgentTypes
     };
-  }, [mainThreadAgentDefinition, mergedTools]);
+  }, [mainThreadAgentDefinition, coordinatorScopedTools]);
 
   // Merge commands from local state, plugins, and MCP
   const commandsWithPlugins = useMergedCommands(localCommands, plugins.commands as Command[]);
@@ -2408,8 +2425,12 @@ export function REPL({
       const state = store.getState();
       const assembled = assembleToolPool(state.toolPermissionContext, state.mcp.tools);
       const merged = mergeAndFilterTools(combinedInitialTools, assembled, state.toolPermissionContext.mode);
-      if (!mainThreadAgentDefinition) return merged;
-      return resolveAgentTools(mainThreadAgentDefinition, merged, false, true).resolvedTools;
+      const coordinatorScoped =
+        !mainThreadAgentDefinition && isCoordinatorModeForMainLoop()
+          ? filterCoordinatorModeTools(merged)
+          : merged
+      if (!mainThreadAgentDefinition) return coordinatorScoped;
+      return resolveAgentTools(mainThreadAgentDefinition, coordinatorScoped, false, true).resolvedTools;
     };
     return {
       abortController,

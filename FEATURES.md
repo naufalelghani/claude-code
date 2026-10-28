@@ -88,6 +88,11 @@ explicitly called out as default-on.
   Enables cached microcompact state through query and API flows.
 - `COMPACTION_REMINDERS`
   Enables reminder copy around compaction and attachment flows.
+- `COORDINATOR_MODE`
+  Enables this fork's experimental coordinator/worker workflow. Runtime activation
+  additionally requires `CLAUDE_CODE_COORDINATOR_MODE=1`. The full development
+  build includes this compile-time feature; setting the environment variable
+  alone does not enable it in a build that omitted the flag.
 - `EXTRACT_MEMORIES`
   Enables post-query memory extraction hooks.
 - `PROMPT_CACHE_BREAK_DETECTION`
@@ -125,6 +130,20 @@ explicitly called out as default-on.
   Enables the tree-sitter bash shadow rollout path.
 - `UNATTENDED_RETRY`
   Enables unattended retry behavior in API retry flows.
+
+## Runtime-Gated Multi-Agent Features
+
+These runtime gates are separate from the compile-time feature flags listed above:
+
+- **Coordinator Mode (this fork):** build with `COORDINATOR_MODE` and set
+  `CLAUDE_CODE_COORDINATOR_MODE=1` when launching the CLI.
+- **Agent Teams:** set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` to opt in.
+  The runtime feature gate `tengu_amber_flint` remains a kill switch for
+  external builds, so the environment variable alone is not an unconditional
+  override.
+
+See the [README multi-agent guide](README.md#multi-agent-modes) for commands and
+behavioral details. For troubleshooting, activate and test one mode at a time.
 
 ## Bundle-Clean Support Flags
 
@@ -259,8 +278,6 @@ than a single wrapper or asset.
   Missing `src/environment-runner/main.js`.
 - `CONTEXT_COLLAPSE`
   Missing `src/tools/CtxInspectTool/CtxInspectTool.js`.
-- `COORDINATOR_MODE`
-  Missing `src/coordinator/workerAgent.js`.
 - `DAEMON`
   Missing `src/daemon/workerRegistry.js`.
 - `DIRECT_CONNECT`

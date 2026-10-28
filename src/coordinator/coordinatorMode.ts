@@ -1,5 +1,8 @@
 import { feature } from 'bun:bundle'
-import { ASYNC_AGENT_ALLOWED_TOOLS } from '../constants/tools.js'
+import {
+  ASYNC_AGENT_ALLOWED_TOOLS,
+  COORDINATOR_MODE_ALLOWED_TOOLS,
+} from '../constants/tools.js'
 import { checkStatsigFeatureGate_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -32,6 +35,16 @@ const INTERNAL_WORKER_TOOLS = new Set([
   SEND_MESSAGE_TOOL_NAME,
   SYNTHETIC_OUTPUT_TOOL_NAME,
 ])
+
+/**
+ * Restrict the coordinator's visible tools to orchestration operations. Worker
+ * agents receive their own allowlisted tools through AgentTool/runAgent.
+ */
+export function filterCoordinatorModeTools<T extends { name: string }>(
+  tools: readonly T[],
+): T[] {
+  return tools.filter(tool => COORDINATOR_MODE_ALLOWED_TOOLS.has(tool.name))
+}
 
 export function isCoordinatorMode(): boolean {
   if (feature('COORDINATOR_MODE')) {
