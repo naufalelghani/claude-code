@@ -33,6 +33,16 @@ const INTERNAL_WORKER_TOOLS = new Set([
   SYNTHETIC_OUTPUT_TOOL_NAME,
 ])
 
+/**
+ * Restrict the coordinator's visible tools to orchestration operations. Worker
+ * agents receive their own allowlisted tools through AgentTool/runAgent.
+ */
+export function filterCoordinatorModeTools<T extends { name: string }>(
+  tools: readonly T[],
+): T[] {
+  return tools.filter(tool => COORDINATOR_MODE_ALLOWED_TOOLS.has(tool.name))
+}
+
 export function isCoordinatorMode(): boolean {
   if (feature('COORDINATOR_MODE')) {
     return isEnvTruthy(process.env.CLAUDE_CODE_COORDINATOR_MODE)
