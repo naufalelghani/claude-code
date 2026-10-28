@@ -108,5 +108,8 @@ export const COORDINATOR_MODE_ALLOWED_TOOLS = new Set([
   AGENT_TOOL_NAME,
   TASK_STOP_TOOL_NAME,
   SEND_MESSAGE_TOOL_NAME,
+  // Keep ToolSearch so the coordinator can discover deferred orchestration
+  // tools such as SendMessage without exposing other deferred tools.
+  TOOL_SEARCH_TOOL_NAME,
   SYNTHETIC_OUTPUT_TOOL_NAME,
 ])
