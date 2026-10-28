@@ -188,8 +188,13 @@ export function modelSupportsAutoMode(model: string): boolean {
       if (/claude-(opus|sonnet|haiku)-4(?!-[6-9])/.test(m)) return false
       return true
     }
-    // External allowlist (firstParty already checked above).
-    return /^claude-(opus|sonnet)-4-6/.test(m)
+    // External builds use the classifier for supported first-party Claude 4+
+    // models. Keep this restricted to known Claude model families; third-party
+    // providers were rejected above until their classifier contract is verified.
+    const externalModel = m.match(
+      /^claude-(opus|sonnet|haiku|fable|mythos)-(\\d+)(?:-|$)/,
+    )
+    return externalModel !== null && Number(externalModel[2]) >= 4
   }
   return false
 }
