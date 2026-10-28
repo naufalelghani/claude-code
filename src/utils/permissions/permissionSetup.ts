@@ -1310,7 +1310,10 @@ export function getAutoModeUnavailableReason(): AutoModeUnavailableReason | null
  */
 export type AutoModeEnabledState = 'enabled' | 'disabled' | 'opt-in'
 
-const AUTO_MODE_ENABLED_DEFAULT: AutoModeEnabledState = 'disabled'
+// External builds should expose Auto Mode when no GrowthBook override is
+// present. Anthropic-internal builds remain disabled by default.
+const AUTO_MODE_ENABLED_DEFAULT: AutoModeEnabledState =
+  process.env.USER_TYPE === 'ant' ? 'disabled' : 'enabled'
 
 function parseAutoModeEnabledState(value: unknown): AutoModeEnabledState {
   if (value === 'enabled' || value === 'disabled' || value === 'opt-in') {
@@ -1321,7 +1324,8 @@ function parseAutoModeEnabledState(value: unknown): AutoModeEnabledState {
 
 /**
  * Reads the `enabled` field from tengu_auto_mode_config (cached, may be stale).
- * Defaults to 'disabled' if GrowthBook is unavailable or the field is unset.
+ * Defaults to enabled for external builds and disabled for Anthropic-internal builds
+ * if GrowthBook is unavailable or the field is unset.
  * Other surfaces (IDE, Desktop) should call this to decide whether to surface
  * auto mode in their mode pickers.
  */
