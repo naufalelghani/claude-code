@@ -128,6 +128,13 @@ explicitly called out as default-on.
   Enables the tree-sitter bash parser backend.
 - `TREE_SITTER_BASH_SHADOW`
   Enables the tree-sitter bash shadow rollout path.
+- `TRANSCRIPT_CLASSIFIER`
+  Enables Auto Mode permission selection and transcript-based tool classification.
+  Included in `bun run build:dev:full`. For external builds, when GrowthBook
+  has no explicit Auto Mode setting, the default is enabled for supported
+  first-party Claude 4+ model families. An explicit
+  `tengu_auto_mode_config.enabled = 'disabled'` remains a runtime circuit breaker;
+  Bedrock, Vertex, Foundry, and other non-first-party providers remain unsupported.
 - `UNATTENDED_RETRY`
   Enables unattended retry behavior in API retry flows.
 
@@ -263,11 +270,6 @@ entire subsystem.
 - `TORCH`
   Fails on missing `src/commands/torch.js`. This looks like a single command
   entry gap.
-- `TRANSCRIPT_CLASSIFIER`
-  The first hard failure is missing
-  `src/utils/permissions/yolo-classifier-prompts/auto_mode_system_prompt.txt`.
-  The classifier engine, parser, and settings plumbing already exist, so the
-  missing prompt/assets are likely the first reconstruction target.
 
 ## Broken Flags With Partial Wiring But Medium-Sized Gaps
 
