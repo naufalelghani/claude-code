@@ -34,6 +34,7 @@ import { sleep } from '../../utils/sleep.js';
 import { buildEffectiveSystemPrompt } from '../../utils/systemPrompt.js';
 import { asSystemPrompt } from '../../utils/systemPromptType.js';
 import { getTaskOutputPath } from '../../utils/task/diskOutput.js';
+import { getRunningTasks } from '../../utils/task/framework.js';
 import { getParentSessionId, isTeammate } from '../../utils/teammate.js';
 import { isInProcessTeammate } from '../../utils/teammateContext.js';
 import { teleportToRemote } from '../../utils/teleport.js';
@@ -61,6 +62,9 @@ const proactiveModule = feature('PROACTIVE') || feature('KAIROS') ? require('../
 
 // Progress display constants (for showing background hint)
 const PROGRESS_THRESHOLD_MS = 2000; // Show background hint after 2 seconds
+
+// Coordinator mode intentionally bounds fan-out to avoid runaway worker creation.
+const MAX_COORDINATOR_RUNNING_WORKERS = 3;
 
 // Check if background tasks are disabled at module load time
 const isBackgroundTasksDisabled =
@@ -253,6 +257,20 @@ export const AgentTool = buildTool({
 
     // Get app state for permission mode and agent filtering
     const appState = toolUseContext.getAppState();
+
+    // The coordinator may delegate, but fan-out is bounded. Workers themselves
+    // have Agent disallowed, so this is a hard cap on concurrent coordinator workers.
+    if (isCoordinatorMode()) {
+      const runningWorkerCount = getRunningTasks(appState).filter(
+        task => task.type === 'local_agent' && task.agentType === 'worker',
+      ).length;
+      if (runningWorkerCount >= MAX_COORDINATOR_RUNNING_WORKERS) {
+        throw new Error(
+          `Coordinator Mode is limited to ${MAX_COORDINATOR_RUNNING_WORKERS} running workers. Wait for one to finish or continue an existing worker instead of spawning another.`,
+        );
+      }
+    }
+
     const permissionMode = appState.toolPermissionContext.mode;
     // In-process teammates get a no-op setAppState; setAppStateForTasks
     // reaches the root store so task registration/progress/kill stay visible.
