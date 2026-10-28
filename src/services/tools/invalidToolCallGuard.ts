@@ -5,6 +5,19 @@
  */
 const MAX_INVALID_TOOL_CALLS_PER_TOOL = 3
 const MAX_INVALID_TOOL_CALLS_PER_REQUEST = 8
+function getToolResultText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+
+  return content
+    .map(block => {
+      if (typeof block !== 'object' || block === null) return ''
+      const text = (block as Record<string, unknown>).text
+      return typeof text === 'string' ? text : ''
+    })
+    .join('\n')
+}
+
 export function getInputValidationToolUseIds(message: unknown): string[] {
   if (typeof message !== 'object' || message === null) return []
   const envelope = message as Record<string, unknown>
@@ -20,10 +33,7 @@ export function getInputValidationToolUseIds(message: unknown): string[] {
     if (typeof block !== 'object' || block === null) continue
     const result = block as Record<string, unknown>
     if (result.type !== 'tool_result' || result.is_error !== true) continue
-    if (
-      typeof result.content !== 'string' ||
-      !result.content.includes('InputValidationError:')
-    ) {
+    if (!getToolResultText(result.content).includes('InputValidationError')) {
       continue
     }
     if (typeof result.tool_use_id === 'string') {
