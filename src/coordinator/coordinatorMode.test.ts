@@ -29,6 +29,7 @@ describe('Coordinator Mode workers', () => {
       { name: 'Agent' },
       { name: 'SendMessage' },
       { name: 'TaskStop' },
+      { name: 'ToolSearch' },
       { name: 'Bash' },
       { name: 'FileEdit' },
     ]
@@ -37,6 +38,7 @@ describe('Coordinator Mode workers', () => {
       'Agent',
       'SendMessage',
       'TaskStop',
+      'ToolSearch',
     ])
   })
 })
