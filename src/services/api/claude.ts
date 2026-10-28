@@ -165,6 +165,7 @@ import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from 'src/utils/claudeInChrome/commo
 import { CHROME_TOOL_SEARCH_INSTRUCTIONS } from 'src/utils/claudeInChrome/prompt.js'
 import { getMaxThinkingTokensForModel } from 'src/utils/context.js'
 import { logForDebugging } from 'src/utils/debug.js'
+import { summarizeToolSchemas } from 'src/utils/toolSchemaDiagnostics.js'
 import { logForDiagnosticsNoPII } from 'src/utils/diagLogs.js'
 import { type EffortValue, modelSupportsEffort } from 'src/utils/effort.js'
 import {
@@ -1795,6 +1796,17 @@ async function* queryModel(
         queryCheckpoint('query_client_creation_end')
 
         const params = paramsFromContext(context)
+        // Log only the model-facing tool contract (names, property names, and
+        // required keys), never tool input values or full descriptions. This
+        // distinguishes client-side schema loss from model/proxy behavior.
+        logForDebugging(
+          `[tool-schema-audit] ${jsonStringify({
+            model: params.model,
+            provider: getAPIProvider(),
+            firstPartyAnthropicBaseUrl: isFirstPartyAnthropicBaseUrl(),
+            tools: summarizeToolSchemas(params.tools ?? []),
+          })}`,
+        )
         captureAPIRequest(params, options.querySource) // Capture for bug reports
 
         maxOutputTokens = params.max_tokens

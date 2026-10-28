@@ -99,8 +99,9 @@ import {
   startToolSpan,
 } from '../../utils/telemetry/sessionTracing.js'
 import {
+  appendToolInputRecoveryGuidance,
   formatError,
-  formatZodValidationError,
+  formatToolInputValidationError,
 } from '../../utils/toolErrors.js'
 import {
   processPreMappedToolResultBlock,
@@ -614,8 +615,6 @@ async function checkPermissionsAndCallTool(
   // Validate input types with zod (surprisingly, the model is not great at generating valid input)
   const parsedInput = tool.inputSchema.safeParse(input)
   if (!parsedInput.success) {
-    let errorContent = formatZodValidationError(tool.name, parsedInput.error)
-
     const schemaHint = buildSchemaNotSentHint(
       tool,
       toolUseContext.messages,
@@ -626,8 +625,12 @@ async function checkPermissionsAndCallTool(
         toolName: sanitizeToolNameForAnalytics(tool.name),
         isMcp: tool.isMcp ?? false,
       })
-      errorContent += schemaHint
     }
+    const errorContent = formatToolInputValidationError(
+      tool.name,
+      parsedInput.error,
+      schemaHint,
+    )
 
     logForDebugging(
       `${tool.name} tool input error: ${errorContent.slice(0, 200)}`,
@@ -685,8 +688,11 @@ async function checkPermissionsAndCallTool(
     toolUseContext,
   )
   if (isValidCall?.result === false) {
+    const validationErrorContent = appendToolInputRecoveryGuidance(
+      isValidCall.message,
+    )
     logForDebugging(
-      `${tool.name} tool validation error: ${isValidCall.message?.slice(0, 200)}`,
+      `${tool.name} tool validation error: ${validationErrorContent.slice(0, 200)}`,
     )
     logEvent('tengu_tool_use_error', {
       messageID:
@@ -720,7 +726,7 @@ async function checkPermissionsAndCallTool(
           content: [
             {
               type: 'tool_result',
-              content: `<tool_use_error>${isValidCall.message}</tool_use_error>`,
+              content: `<tool_use_error>${validationErrorContent}</tool_use_error>`,
               is_error: true,
               tool_use_id: toolUseID,
             },

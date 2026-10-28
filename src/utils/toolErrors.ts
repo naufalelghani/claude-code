@@ -130,3 +130,26 @@ export function formatZodValidationError(
 
   return errorContent
 }
+
+/**
+ * Guidance appended to validation failures so models can recover instead of
+ * repeatedly issuing the same malformed call.
+ */
+export const TOOL_INPUT_RECOVERY_GUIDANCE =
+  'The tool was not executed because its input failed validation. Do not retry this tool call with identical arguments. Correct the reported parameters first. If a required identifier is unknown, look it up with an appropriate list/get tool; if the schema-not-sent hint above appears, load the schema with ToolSearch before retrying. If required values cannot be inferred, ask the user.'
+
+export function appendToolInputRecoveryGuidance(errorContent: string): string {
+  return `${errorContent}\n\n${TOOL_INPUT_RECOVERY_GUIDANCE}`
+}
+
+export function formatToolInputValidationError(
+  toolName: string,
+  error: ZodError,
+  schemaHint?: string | null,
+): string {
+  const details = formatZodValidationError(toolName, error)
+  const hint = schemaHint?.trim()
+  return appendToolInputRecoveryGuidance(
+    hint ? `${details}\n\n${hint}` : details,
+  )
+}
