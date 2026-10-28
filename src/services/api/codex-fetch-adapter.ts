@@ -192,7 +192,7 @@ function translateMessages(
  * @param anthropicBody - The Anthropic request body to translate
  * @returns Object containing the translated Codex body and model
  */
-function translateToCodexBody(anthropicBody: Record<string, unknown>): {
+export function translateToCodexBody(anthropicBody: Record<string, unknown>): {
   codexBody: Record<string, unknown>
   codexModel: string
 } {
@@ -203,6 +203,9 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
     | undefined
   const claudeModel = anthropicBody.model as string
   const anthropicTools = (anthropicBody.tools || []) as AnthropicTool[]
+  const anthropicToolChoice = anthropicBody.tool_choice as
+    | { type?: unknown; name?: unknown }
+    | undefined
   const outputConfig = anthropicBody.output_config as
     | { effort?: unknown }
     | undefined
@@ -226,13 +229,26 @@ function translateToCodexBody(anthropicBody: Record<string, unknown>): {
   // Convert messages
   const input = translateMessages(anthropicMessages)
 
+  // Preserve Anthropic's forced-tool choice. Auto Mode depends on the
+  // classifier always returning `classify_result`; translating every request
+  // to tool_choice='auto' lets the model return prose instead of a decision.
+  const codexToolChoice =
+    anthropicToolChoice?.type === 'tool' &&
+    typeof anthropicToolChoice.name === 'string'
+      ? { type: 'function', name: anthropicToolChoice.name }
+      : anthropicToolChoice?.type === 'any'
+        ? 'required'
+        : anthropicToolChoice?.type === 'none'
+          ? 'none'
+          : 'auto'
+
   const codexBody: Record<string, unknown> = {
     model: codexModel,
     store: false,
     stream: true,
     instructions,
     input,
-    tool_choice: 'auto',
+    tool_choice: codexToolChoice,
     parallel_tool_calls: true,
   }
 
