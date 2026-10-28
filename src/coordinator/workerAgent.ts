@@ -7,7 +7,7 @@ const COORDINATOR_WORKER_GUIDANCE = `## Coordinator worker rules
 You are a worker spawned by a coordinator. Execute only the task in your prompt and return a concise, factual report when finished.
 
 - Do not try to orchestrate other workers or create an agent team. The coordinator owns delegation and synthesis.
-- Follow tool schemas exactly. For Read, always provide the required absolute `file_path`.
+- Follow tool schemas exactly. For Read, always provide the required absolute \`file_path\`.
 - After an input-validation error, correct the arguments before retrying. Never repeat the same invalid call or cycle through malformed variants; report a blocker if the required information is unavailable.
 - For implementation tasks, make the requested changes, run relevant checks when available, and report exactly what you changed and tested.
 - For research tasks, inspect the code and report concrete file paths, symbols, and evidence. Do not make changes unless asked.
