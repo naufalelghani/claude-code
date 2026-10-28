@@ -219,6 +219,33 @@ function isIncompleteTerminalStringControl(sequence: string): boolean {
   )
 }
 
+/**
+ * Strip a CSI terminal-response tail whose leading ESC was flushed as a
+ * standalone Escape key before the rest of the response arrived. This can
+ * happen when rendering blocks the event loop past the input parser's ESC
+ * disambiguation timer. DA1 is the common case: the terminal's reply to the
+ * CSI c sentinel otherwise leaks into the prompt as text like "[?61;4c".
+ *
+ * The patterns are intentionally limited to response forms that cannot be
+ * produced by ordinary keys. If other text follows the response in the same
+ * read, return that suffix so genuine user input is preserved.
+ */
+function stripOrphanedTerminalResponseTail(text: string): string | undefined {
+  const responsePatterns = [
+    /^\[\?[\d;]*c/, // DA1 (primary device attributes)
+    /^\[>[\d;]*c/, // DA2 (secondary device attributes)
+    /^\[\?\d+;\d+\$y/, // DECRPM (DEC mode report)
+    /^\[\?\d+u/, // Kitty keyboard protocol flags
+    /^\[\?\d+;\d+R/, // DEC cursor-position report
+  ]
+
+  for (const pattern of responsePatterns) {
+    const match = pattern.exec(text)
+    if (match) return text.slice(match[0].length)
+  }
+  return undefined
+}
+
 export function parseMultipleKeypresses(
   prevState: KeyParseState,
   input: Buffer | string | null = '',
@@ -280,26 +307,33 @@ export function parseMultipleKeypresses(
     } else if (token.type === 'text') {
       if (inPaste) {
         pasteBuffer += token.value
-      } else if (
-        /^\[<\d+;\d+;\d+[Mm]$/.test(token.value) ||
-        /^\[M[\x60-\x7f][\x20-\uffff]{2}$/.test(token.value)
-      ) {
-        // Orphaned SGR/X10 mouse tail (fullscreen only — mouse tracking is off
-        // otherwise). A heavy render blocked the event loop past App's 50ms
-        // flush timer, so the buffered ESC was flushed as a lone Escape and
-        // the continuation `[<btn;col;rowM` arrived as text. Re-synthesize
-        // with the ESC prefix so the scroll event still fires instead of
-        // leaking into the prompt. The spurious Escape is gone; App.tsx's
-        // readableLength check prevents it. The X10 Cb slot is narrowed to
-        // the wheel range [\x60-\x7f] (0x40|modifiers + 32) — a full [\x20-]
-        // range would match typed input like `[MAX]` batched into one read
-        // and silently drop it as a phantom click. Click/drag orphans leak
-        // as visible garbage instead; deletable garbage beats silent loss.
-        const resynthesized = '\x1b' + token.value
-        const mouse = parseMouseEvent(resynthesized)
-        keys.push(mouse ?? parseKeypress(resynthesized))
       } else {
-        keys.push(parseKeypress(token.value))
+        const responseTail = stripOrphanedTerminalResponseTail(token.value)
+        if (responseTail !== undefined) {
+          // The leading ESC was already emitted as a standalone Escape event.
+          // Drop the reply tail, but keep any normal input that followed it.
+          if (responseTail) keys.push(parseKeypress(responseTail))
+        } else if (
+          /^\[<\d+;\d+;\d+[Mm]$/.test(token.value) ||
+          /^\[M[\x60-\x7f][\x20-\uffff]{2}$/.test(token.value)
+        ) {
+          // Orphaned SGR/X10 mouse tail (fullscreen only — mouse tracking is off
+          // otherwise). A heavy render blocked the event loop past App's 50ms
+          // flush timer, so the buffered ESC was flushed as a lone Escape and
+          // the continuation `[<btn;col;rowM` arrived as text. Re-synthesize
+          // with the ESC prefix so the scroll event still fires instead of
+          // leaking into the prompt. The spurious Escape is gone; App.tsx's
+          // readableLength check prevents it. The X10 Cb slot is narrowed to
+          // the wheel range [\x60-\x7f] (0x40|modifiers + 32) — a full [\x20-]
+          // range would match typed input like `[MAX]` batched into one read
+          // and silently drop it as a phantom click. Click/drag orphans leak
+          // as visible garbage instead; deletable garbage beats silent loss.
+          const resynthesized = '\x1b' + token.value
+          const mouse = parseMouseEvent(resynthesized)
+          keys.push(mouse ?? parseKeypress(resynthesized))
+        } else {
+          keys.push(parseKeypress(token.value))
+        }
       }
     }
   }

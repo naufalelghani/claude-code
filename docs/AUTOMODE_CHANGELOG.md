@@ -827,3 +827,19 @@ Regex ini match pola:
 | Haiku 3.5 | `system/claude-haiku-3.5.txt` |
 
 **Catatan:** Internal Claude inference tetap diarahkan ke `combo/byv-flash-2410`; pemisahan `systemPromptModel` memastikan prompt tetap berasal dari model yang dipilih user.
+
+
+---
+
+## 2026-10-28 — Auto Mode untuk Codex OAuth
+
+**Masalah:** Build sudah menyertakan `TRANSCRIPT_CLASSIFIER`, tetapi Auto Mode tidak tersedia di carousel Shift+Tab ketika sesi menggunakan model Codex. Gate `modelSupportsAutoMode()` hanya mengizinkan provider `firstParty`, sehingga provider `openai` untuk Codex selalu ditolak. Selain itu, adapter Codex mengubah seluruh pilihan tool Anthropic menjadi `tool_choice: 'auto'`, termasuk permintaan classifier yang secara eksplisit mewajibkan `classify_result`.
+
+**Perubahan:**
+
+- `src/utils/betas.ts`: izinkan Auto Mode untuk sesi Codex OAuth yang terautentikasi dan model yang terdaftar di katalog `CODEX_MODELS`; provider lain tetap ditolak kecuali first-party Claude yang didukung.
+- `src/services/api/codex-fetch-adapter.ts`: terjemahkan Anthropic `tool_choice: { type: 'tool', name }` menjadi Responses API `{ type: 'function', name }`, `any` menjadi `required`, dan pertahankan default `auto`.
+- `src/services/api/codex-fetch-adapter.test.ts`: tambahkan tes untuk forced classifier tool choice, `any`, dan pilihan default.
+- `FEATURES.md`: perbarui matriks dukungan Auto Mode.
+
+**Verifikasi yang diperlukan pada checkout:** jalankan `bun test src/services/api/codex-fetch-adapter.test.ts`, lalu `bun run build:dev:full`. Setelah build berhasil, mulai ulang CLI dan gunakan **Shift+Tab** untuk melakukan siklus permission mode. Build dan runtime Codex end-to-end belum diverifikasi dari sesi edit GitHub ini.

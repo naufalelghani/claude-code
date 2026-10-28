@@ -38,4 +38,33 @@ describe('parseMultipleKeypresses terminal replies', () => {
       expect(flushedKeys).toEqual([])
     }
   })
+
+  test('discards an orphaned DA1 reply tail when its ESC was flushed separately', () => {
+    const [, partialState] = parseMultipleKeypresses(INITIAL_STATE, '\x1b')
+    const [, flushedState] = parseMultipleKeypresses(partialState, null)
+    const [replyKeys] = parseMultipleKeypresses(flushedState, '[?61;4c')
+
+    expect(replyKeys).toEqual([])
+  })
+
+  test('discards orphaned CSI terminal replies without swallowing following user text', () => {
+    for (const responseTail of [
+      '[?61;4c',
+      '[>0;276;0c',
+      '[?2026;1$y',
+      '[?1u',
+      '[?12;34R',
+    ]) {
+      const [keys] = parseMultipleKeypresses(INITIAL_STATE, responseTail)
+      expect(keys).toEqual([])
+    }
+
+    const [keysWithFollowingText] = parseMultipleKeypresses(
+      INITIAL_STATE,
+      '[?61;4chello',
+    )
+    expect(keysWithFollowingText).toEqual([
+      expect.objectContaining({ kind: 'key', sequence: 'hello' }),
+    ])
+  })
 })
